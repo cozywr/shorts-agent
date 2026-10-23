@@ -1,0 +1,44 @@
+# Daily cartoon-parody Shorts: famous movie/TV scenes re-enacted by ORIGINAL cartoon characters.
+# Characters and voices here are our own creations, so every frame and voice on the channel is ours.
+
+style: >
+  bright 2D cartoon, thick black outlines, flat saturated colors, expressive faces,
+  Saturday-morning animation look, vertical 9:16 composition, no text or logos in the image
+
+characters:
+  pete:
+    name: Pickle Pete
+    look: an anxious green pickle with stubby arms, huge watery eyes and a tiny red necktie
+    personality: nervous, fast-talking, always in over his head
+    voice_id: REPLACE_WITH_ELEVENLABS_VOICE_ID
+  muffin:
+    name: Big Mama Muffin
+    look: a large blueberry muffin with a paper-cup skirt, gold hoop earrings and sunglasses
+    personality: calm, terrifying boss energy, deep slow voice
+    voice_id: REPLACE_WITH_ELEVENLABS_VOICE_ID
+  waddles:
+    name: Sir Waddles
+    look: a plump penguin wearing a monocle and a too-small top hat
+    personality: pompous, theatrical, overly dramatic British narrator type
+    voice_id: REPLACE_WITH_ELEVENLABS_VOICE_ID
+  zip:
+    name: Zip
+    look: a tiny orange hamster with a lightning-bolt patch of fur and oversized sneakers
+    personality: hyperactive, squeaky, misunderstands everything
+    voice_id: REPLACE_WITH_ELEVENLABS_VOICE_ID
+
+script:
+  model: claude-sonnet-5-5
+  min_shots: 6
+  max_shots: 9
+  max_words: 120          # ~45 seconds of speech
+
+video:
+  max_seconds: 59
+  pause_between_lines: 0.3
+
+youtube:
+  # "private" lets you review each Short in YouTube Studio before publishing.
+  # Switch to "public" once you trust the output (and your API project has passed YouTube's audit).
+  privacy: private
+  category_id: "23"       # Comedy

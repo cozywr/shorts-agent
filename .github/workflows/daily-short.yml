@@ -1,0 +1,48 @@
+name: Daily Short
+
+on:
+  schedule:
+    - cron: "0 16 * * *"   # every day at 16:00 UTC (noon US Eastern); change to taste
+  workflow_dispatch:         # lets you trigger a run by hand from the Actions tab
+    inputs:
+      dry_run:
+        description: "Make the video but don't upload it"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write            # to commit history.json so scenes never repeat
+
+jobs:
+  post:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: pip install -r requirements.txt
+      - name: Make and upload today's Short
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python -m agent.main ${{ inputs.dry_run && '--dry-run' || '' }}
+      - name: Keep the video so you can watch it
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: short-${{ github.run_number }}
+          path: output/
+          retention-days: 14
+      - name: Remember which scene was used
+        run: |
+          git config user.name "shorts-agent"
+          git config user.email "shorts-agent@users.noreply.github.com"
+          git add history.json
+          git diff --cached --quiet || (git commit -m "Log today's Short" && git push)
