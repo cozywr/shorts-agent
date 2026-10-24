@@ -5,6 +5,8 @@
 """
 import argparse
 import json
+import os
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -15,7 +17,16 @@ from agent import script_writer, uploader, video, visuals, voices
 ROOT = Path(__file__).resolve().parent.parent
 
 
+YOUTUBE_SECRETS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
+
+
 def run(dry_run: bool) -> None:
+    # Check before spending money on the script, voices and images.
+    missing = [name for name in YOUTUBE_SECRETS if not os.environ.get(name)]
+    if missing and not dry_run:
+        sys.exit(f"Can't upload to YouTube: these secrets aren't set yet: {', '.join(missing)}. "
+                 "Add them (README step 3-4) or run with dry run ticked.")
+
     config = yaml.safe_load((ROOT / "config.yaml").read_text())
     history_file = ROOT / "history.json"
     history = json.loads(history_file.read_text())
