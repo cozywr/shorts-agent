@@ -35,6 +35,10 @@ script:
   max_shots: 9
   max_words: 120          # ~45 seconds of speech
 
+images:
+  model: gpt-image-1
+  quality: medium     # low | medium | high
+
 video:
   max_seconds: 59
   pause_between_lines: 0.3

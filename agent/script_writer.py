@@ -16,6 +16,8 @@ starring these characters. Rules:
 - Never mention, describe or imitate the real actors or real show characters.
 - {min_shots}-{max_shots} shots, one spoken line per shot, at most {max_words} words in total.
 - Land a punchline in the final shot.
+- Keep every shot's `setting` family-friendly and visual: no weapons, blood, drugs or crime props
+  (an image safety filter rejects those). Swap them for silly stand-ins like snacks or toys.
 - Do NOT use any of these scenes again: {used}
 
 Reply with the finished script as JSON."""
