@@ -1,6 +1,4 @@
 """Asks Claude to pick a famous scene and write a short parody of it for our original characters."""
-import json
-
 import anthropic
 
 PROMPT = """You write scripts for a YouTube Shorts channel that re-enacts famous movie and TV scenes
@@ -18,19 +16,39 @@ starring these characters. Rules:
 - Land a punchline in the final shot.
 - Do NOT use any of these scenes again: {used}
 
-Reply with JSON only, no prose, in exactly this shape:
-{{
-  "source": "Show or movie title",
-  "scene": "Short name of the famous scene",
-  "title": "YouTube title under 80 characters, ends with #Shorts",
-  "description": "1-2 sentence description, says it is a parody with original characters",
-  "tags": ["5-10 tags"],
-  "shots": [
-    {{"speaker": "character id", "line": "spoken line",
-      "characters": ["ids visible in the shot"],
-      "setting": "where the shot takes place and what is happening, one sentence"}}
-  ]
-}}"""
+Submit the finished script with the submit_script tool."""
+
+# Forcing a tool call makes the API hand back already-parsed JSON, so quotes in dialogue can't break it.
+SCRIPT_TOOL = {
+    "name": "submit_script",
+    "description": "Submit the finished parody script.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "source": {"type": "string", "description": "Show or movie title"},
+            "scene": {"type": "string", "description": "Short name of the famous scene"},
+            "title": {"type": "string", "description": "YouTube title under 80 characters, ends with #Shorts"},
+            "description": {"type": "string", "description": "1-2 sentences, says it is a parody with original characters"},
+            "tags": {"type": "array", "items": {"type": "string"}, "description": "5-10 tags"},
+            "shots": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "speaker": {"type": "string", "description": "character id"},
+                        "line": {"type": "string", "description": "spoken line"},
+                        "characters": {"type": "array", "items": {"type": "string"},
+                                       "description": "ids visible in the shot"},
+                        "setting": {"type": "string",
+                                    "description": "where the shot takes place and what is happening, one sentence"},
+                    },
+                    "required": ["speaker", "line", "characters", "setting"],
+                },
+            },
+        },
+        "required": ["source", "scene", "title", "description", "tags", "shots"],
+    },
+}
 
 
 def write_script(config: dict, used_scenes: list[str]) -> dict:
@@ -50,10 +68,11 @@ def write_script(config: dict, used_scenes: list[str]) -> dict:
     resp = client.messages.create(
         model=s["model"],
         max_tokens=2000,
+        tools=[SCRIPT_TOOL],
+        tool_choice={"type": "tool", "name": "submit_script"},
         messages=[{"role": "user", "content": prompt}],
     )
-    text = "".join(b.text for b in resp.content if b.type == "text")
-    script = json.loads(text[text.index("{") : text.rindex("}") + 1])
+    script = next(b.input for b in resp.content if b.type == "tool_use")
     _validate(script, config)
     return script
 
