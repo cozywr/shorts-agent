@@ -1,4 +1,5 @@
-"""Gives each character its own ElevenLabs voice and turns lines into speech with it."""
+"""Gives the channel its own ElevenLabs narrator voice and reads the story with word timings."""
+import base64
 import json
 import os
 from pathlib import Path
@@ -25,24 +26,28 @@ def _design(name: str, description: str) -> str:
     return resp.json()["voice_id"]
 
 
-def ensure_voices(config: dict, voices_file: Path) -> dict[str, str]:
-    """Returns {character id: voice id}, designing any voice that doesn't exist yet."""
+def ensure_narrator(config: dict, voices_file: Path) -> str:
+    """Returns the narrator's voice id, designing the voice on the first run."""
+    n = config["narrator"]
+    if n.get("voice_id"):
+        return n["voice_id"]
     voices = json.loads(voices_file.read_text()) if voices_file.exists() else {}
-    for cid, c in config["characters"].items():
-        if cid not in voices:
-            voices[cid] = _design(f"Shorts - {c['name']}", c["voice"])
-            print(f"Designed a new voice for {c['name']}")
-            voices_file.write_text(json.dumps(voices, indent=2) + "\n")
-    return voices
+    if "narrator" not in voices:
+        voices["narrator"] = _design(f"Shorts - {n['name']}", n["voice"])
+        print("Designed a new narrator voice")
+        voices_file.write_text(json.dumps(voices, indent=2) + "\n")
+    return voices["narrator"]
 
 
-def speak(text: str, voice_id: str, out: Path) -> Path:
+def speak(text: str, voice_id: str, out: Path) -> dict:
+    """Saves the speech to `out` and returns ElevenLabs' per-character timing for the text."""
     resp = requests.post(
-        f"{API}/text-to-speech/{voice_id}",
-        headers={**_headers(), "accept": "audio/mpeg"},
+        f"{API}/text-to-speech/{voice_id}/with-timestamps",
+        headers=_headers(),
         json={"text": text, "model_id": "eleven_multilingual_v2"},
-        timeout=120,
+        timeout=300,
     )
     resp.raise_for_status()
-    out.write_bytes(resp.content)
-    return out
+    data = resp.json()
+    out.write_bytes(base64.b64decode(data["audio_base64"]))
+    return data["alignment"]

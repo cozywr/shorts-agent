@@ -1,92 +1,122 @@
-"""Assembles frames + voice lines into a 1080x1920 Short with a slow zoom and burned-in captions."""
-import array
-import math
+"""Puts the narration over a random slice of gameplay, cropped to 1080x1920, with big word-by-word captions."""
+import json
+import random
 import subprocess
 from pathlib import Path
 
 FPS = 30
-SAMPLE_RATE = 8000
-FLAP_FRAMES = 3  # while talking, the mouth opens and closes every 3 frames (10 flaps a second)
+MAX_SPEEDUP = 1.25   # a story that runs long is read up to 25% faster before anything gets cut
+CHUNK_WORDS = 3      # captions show up to this many words at a time
+CHUNK_CHARS = 16
 
 
 def _run(*args: str) -> str:
     return subprocess.run(args, check=True, capture_output=True, text=True).stdout
 
 
+def _probe(path: Path) -> dict:
+    return json.loads(_run("ffprobe", "-v", "error", "-show_entries", "format=duration:stream=codec_type",
+                           "-of", "json", str(path)))
+
+
 def duration(path: Path) -> float:
-    return float(_run("ffprobe", "-v", "error", "-show_entries", "format=duration",
-                      "-of", "csv=p=0", str(path)).strip())
+    return float(_probe(path)["format"]["duration"])
 
 
-def mouth_timeline(audio: Path, frames: int) -> list[bool]:
-    """For each video frame, whether the speaker's mouth should be open."""
-    pcm = subprocess.run(["ffmpeg", "-v", "error", "-i", str(audio), "-ac", "1", "-ar", str(SAMPLE_RATE),
-                          "-f", "s16le", "-"], check=True, capture_output=True).stdout
-    samples = array.array("h", pcm[: len(pcm) // 2 * 2])
-    per_frame = SAMPLE_RATE // FPS
-    loudness = []
-    for i in range(frames):
-        chunk = samples[i * per_frame:(i + 1) * per_frame]
-        loudness.append(math.sqrt(sum(x * x for x in chunk) / len(chunk)) if chunk else 0.0)
-    threshold = max(max(loudness, default=0) * 0.15, 300)
-    return [level > threshold and (i // FLAP_FRAMES) % 2 == 0 for i, level in enumerate(loudness)]
+def words(alignment: dict, start_char: int = 0) -> list[dict]:
+    """Groups ElevenLabs' per-character timings into words, skipping characters before `start_char`."""
+    chars = alignment["characters"]
+    starts, ends = alignment["character_start_times_seconds"], alignment["character_end_times_seconds"]
+    out, current = [], None
+    for i in range(start_char, len(chars)):
+        if chars[i].isspace():
+            current = None
+            continue
+        if current is None:
+            current = {"text": "", "start": starts[i]}
+            out.append(current)
+        current["text"] += chars[i]
+        current["end"] = ends[i]
+    return out
 
 
-def _frames_input(closed: Path, mouth_open: Path, timeline: list[bool], listing: Path) -> list[str]:
-    """ffmpeg concat-demuxer input that shows the open or closed frame for each run of the timeline."""
-    lines, run_start = [], 0
-    for i in range(1, len(timeline) + 1):
-        if i == len(timeline) or timeline[i] != timeline[run_start]:
-            frame = mouth_open if timeline[run_start] else closed
-            lines.append(f"file '{frame.resolve()}'\nduration {(i - run_start) / FPS:.4f}\n")
-            run_start = i
-    lines.append(f"file '{closed.resolve()}'\n")  # concat ignores the last entry's duration
-    listing.write_text("".join(lines))
-    return ["-f", "concat", "-safe", "0", "-i", str(listing)]
+def _chunks(story_words: list[dict]) -> list[dict]:
+    chunks, current = [], []
+    for w in story_words:
+        current.append(w)
+        text = " ".join(x["text"] for x in current)
+        if len(current) >= CHUNK_WORDS or len(text) >= CHUNK_CHARS or w["text"][-1] in ".,!?;:":
+            chunks.append({"text": text, "start": current[0]["start"], "end": current[-1]["end"]})
+            current = []
+    if current:
+        chunks.append({"text": " ".join(x["text"] for x in current),
+                       "start": current[0]["start"], "end": current[-1]["end"]})
+    # Hold each chunk until the next one starts, unless the narrator pauses.
+    for a, b in zip(chunks, chunks[1:]):
+        if b["start"] - a["end"] < 0.4:
+            a["end"] = b["start"]
+    return chunks
 
 
-def _segment(image: Path, audio: Path, seconds: float, out: Path, mouth_open: Path | None = None) -> None:
-    frames = int(seconds * FPS) + 1
-    fit = "scale=2160:3840:force_original_aspect_ratio=increase,crop=2160:3840,setsar=1,"
-    if mouth_open:
-        video_in = _frames_input(image, mouth_open, mouth_timeline(audio, frames), out.with_suffix(".txt"))
-        # One output frame per input frame; `on` counts frames so the slow zoom keeps going across flaps.
-        zoom = f"fps={FPS},{fit}zoompan=z='min(1+on*0.0007,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=1"
+def _ass_time(t: float) -> str:
+    cs = int(round(t * 100))
+    return f"{cs // 360000}:{cs // 6000 % 60:02}:{cs // 100 % 60:02}.{cs % 100:02}"
+
+
+def captions(story_words: list[dict], speed: float, out: Path) -> Path:
+    header = """[Script Info]
+ScriptType: v4.00+
+PlayResX: 1080
+PlayResY: 1920
+WrapStyle: 0
+
+[V4+ Styles]
+Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
+Style: Word,DejaVu Sans,100,&H00FFFFFF,&H00FFFFFF,&H00000000,&H96000000,-1,0,0,0,100,100,0,0,1,8,4,5,60,60,0,1
+
+[Events]
+Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
+"""
+    lines = []
+    for c in _chunks(story_words):
+        text = c["text"].upper().replace("{", "").replace("}", "").replace("\\", "")
+        pop = r"{\fscx120\fscy120\t(0,90,\fscx100\fscy100)}"
+        lines.append(f"Dialogue: 0,{_ass_time(c['start'] / speed)},{_ass_time(c['end'] / speed)},Word,,0,0,0,,"
+                     f"{pop}{text}\n")
+    out.write_text(header + "".join(lines))
+    return out
+
+
+def assemble(gameplay: Path, narration: Path, alignment: dict, title_chars: int, card: Path,
+             workdir: Path, out: Path, settings: dict) -> Path:
+    """Narration is the post title followed by the story; the card shows while the title is read."""
+    max_seconds = settings["max_seconds"]
+    spoken = duration(narration)
+    speed = min(max(spoken / max_seconds, 1.0), MAX_SPEEDUP)
+    length = min(spoken / speed, max_seconds)
+
+    title_end = alignment["character_end_times_seconds"][title_chars - 1] / speed
+    subs = captions(words(alignment, title_chars), speed, workdir / "captions.ass")
+
+    info = _probe(gameplay)
+    clip_seconds = float(info["format"]["duration"])
+    game_has_audio = any(s["codec_type"] == "audio" for s in info["streams"])
+    if clip_seconds > length + 1:
+        game_in = ["-ss", f"{random.uniform(0, clip_seconds - length - 1):.2f}", "-i", str(gameplay)]
     else:
-        video_in = ["-i", str(image)]
-        zoom = (f"{fit}zoompan=z='min(zoom+0.0007,1.15)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-                f":d={frames}")
-    _run("ffmpeg", "-y", *video_in, "-i", str(audio),
-         "-filter_complex", f"[0:v]{zoom}:s=1080x1920:fps={FPS}[v];[1:a]apad[a]", "-map", "[v]", "-map", "[a]",
-         "-t", f"{seconds:.3f}", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-r", str(FPS),
-         "-c:a", "aac", "-ar", "44100", "-ac", "2", str(out))
+        game_in = ["-stream_loop", "-1", "-i", str(gameplay)]
 
-
-def _ts(t: float) -> str:
-    ms = int(round(t * 1000))
-    return f"{ms // 3600000:02}:{ms // 60000 % 60:02}:{ms // 1000 % 60:02},{ms % 1000:03}"
-
-
-def assemble(shots: list[dict], workdir: Path, out: Path, max_seconds: float, pause: float) -> Path:
-    """Each shot needs `image`, `audio` and `line`, and may have a `mouth_open` frame. Returns the video path."""
-    segments, srt, t = [], [], 0.0
-    for i, shot in enumerate(shots):
-        seconds = duration(shot["audio"]) + pause
-        seg = workdir / f"seg_{i:02}.mp4"
-        _segment(shot["image"], shot["audio"], seconds, seg, shot.get("mouth_open"))
-        segments.append(seg)
-        srt.append(f"{i + 1}\n{_ts(t)} --> {_ts(t + seconds - pause)}\n{shot['line']}\n")
-        t += seconds
-
-    listing = workdir / "segments.txt"
-    listing.write_text("".join(f"file '{s.resolve()}'\n" for s in segments))
-    joined = workdir / "joined.mp4"
-    _run("ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", str(listing), "-c", "copy", str(joined))
-
-    subs = workdir / "captions.srt"
-    subs.write_text("\n".join(srt))
-    style = ("FontName=DejaVu Sans,Fontsize=13,Bold=1,PrimaryColour=&H00FFFFFF,OutlineColour=&H00000000,"
-             "BorderStyle=1,Outline=2,Shadow=0,Alignment=2,MarginV=80,MarginL=20,MarginR=20")
-    _run("ffmpeg", "-y", "-i", str(joined), "-vf", f"subtitles={subs}:force_style='{style}'",
-         "-t", str(max_seconds), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "copy", str(out))
+    voice = f"[1:a]atempo={speed:.4f}[voice]" if speed > 1 else "[1:a]anull[voice]"
+    volume = settings.get("gameplay_volume", 0)
+    if volume and game_has_audio:
+        audio = f"{voice};[0:a]volume={volume}[game];[voice][game]amix=inputs=2:duration=first:normalize=0[a]"
+    else:
+        audio = voice.replace("[voice]", "[a]")
+    video = (f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps={FPS}[bg];"
+             f"[bg][2:v]overlay=(W-w)/2:(H-h)/2:enable='lt(t,{title_end:.3f})'[withcard];"
+             f"[withcard]subtitles=filename='{subs}'[v]")
+    _run("ffmpeg", "-y", *game_in, "-i", str(narration), "-loop", "1", "-i", str(card),
+         "-filter_complex", f"{video};{audio}", "-map", "[v]", "-map", "[a]", "-t", f"{length:.3f}",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS),
+         "-c:a", "aac", "-ar", "44100", "-ac", "2", "-movflags", "+faststart", str(out))
     return out

@@ -28,7 +28,8 @@ def upload(video: Path, script: dict, config: dict) -> str:
             "tags": script.get("tags", [])[:15],
             "categoryId": yt["category_id"],
         },
-        "status": {"privacyStatus": yt["privacy"], "selfDeclaredMadeForKids": False},
+        "status": {"privacyStatus": yt["privacy"], "selfDeclaredMadeForKids": False,
+                   "containsSyntheticMedia": True},
     }
     request = youtube.videos().insert(
         part="snippet,status", body=body,

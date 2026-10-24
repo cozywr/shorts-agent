@@ -9,13 +9,13 @@ on:
         description: "Make the video but don't upload it"
         type: boolean
         default: true
-      scene:
-        description: "Scene to parody (optional), e.g. Breaking Bad, the I am the one who knocks scene"
+      idea:
+        description: "Story idea (optional), e.g. a roommate who labels every single grape"
         type: string
         default: ""
 
 permissions:
-  contents: write            # to commit history.json so scenes never repeat
+  contents: write            # to commit history.json so stories never repeat
 
 jobs:
   post:
@@ -32,11 +32,11 @@ jobs:
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          SCENE: ${{ inputs.scene }}
+          IDEA: ${{ inputs.idea }}
+          GITHUB_TOKEN: ${{ github.token }}   # to download gameplay from the release
         run: python -m agent.main ${{ inputs.dry_run && '--dry-run' || '' }}
       - name: Keep the video so you can watch it
         if: always()
@@ -45,7 +45,7 @@ jobs:
           name: short-${{ github.run_number }}
           path: output/
           retention-days: 14
-      - name: Remember the voices and which scene was used
+      - name: Remember the voice and which stories were used
         if: always()
         run: |
           git config user.name "shorts-agent"
