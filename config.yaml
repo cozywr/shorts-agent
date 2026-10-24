@@ -30,7 +30,7 @@ characters:
     voice: A tiny squeaky cartoon voice, extremely energetic and hyper, fast excited speech, playful and silly
 
 script:
-  model: claude-sonnet-5-5
+  model: claude-opus-5-5
   min_shots: 6
   max_shots: 9
   max_words: 120          # ~45 seconds of speech

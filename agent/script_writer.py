@@ -1,4 +1,6 @@
 """Asks Claude to pick a famous scene and write a short parody of it for our original characters."""
+import json
+
 import anthropic
 
 PROMPT = """You write scripts for a YouTube Shorts channel that re-enacts famous movie and TV scenes
@@ -16,38 +18,36 @@ starring these characters. Rules:
 - Land a punchline in the final shot.
 - Do NOT use any of these scenes again: {used}
 
-Submit the finished script with the submit_script tool."""
+Reply with the finished script as JSON."""
 
-# Forcing a tool call makes the API hand back already-parsed JSON, so quotes in dialogue can't break it.
-SCRIPT_TOOL = {
-    "name": "submit_script",
-    "description": "Submit the finished parody script.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "source": {"type": "string", "description": "Show or movie title"},
-            "scene": {"type": "string", "description": "Short name of the famous scene"},
-            "title": {"type": "string", "description": "YouTube title under 80 characters, ends with #Shorts"},
-            "description": {"type": "string", "description": "1-2 sentences, says it is a parody with original characters"},
-            "tags": {"type": "array", "items": {"type": "string"}, "description": "5-10 tags"},
-            "shots": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "speaker": {"type": "string", "description": "character id"},
-                        "line": {"type": "string", "description": "spoken line"},
-                        "characters": {"type": "array", "items": {"type": "string"},
-                                       "description": "ids visible in the shot"},
-                        "setting": {"type": "string",
-                                    "description": "where the shot takes place and what is happening, one sentence"},
-                    },
-                    "required": ["speaker", "line", "characters", "setting"],
+# Structured outputs constrain the reply to this schema, so quotes in dialogue can't break the JSON.
+SCRIPT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "source": {"type": "string", "description": "Show or movie title"},
+        "scene": {"type": "string", "description": "Short name of the famous scene"},
+        "title": {"type": "string", "description": "YouTube title under 80 characters, ends with #Shorts"},
+        "description": {"type": "string", "description": "1-2 sentences, says it is a parody with original characters"},
+        "tags": {"type": "array", "items": {"type": "string"}, "description": "5-10 tags"},
+        "shots": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "speaker": {"type": "string", "description": "character id"},
+                    "line": {"type": "string", "description": "spoken line"},
+                    "characters": {"type": "array", "items": {"type": "string"},
+                                   "description": "ids visible in the shot"},
+                    "setting": {"type": "string",
+                                "description": "where the shot takes place and what is happening, one sentence"},
                 },
+                "required": ["speaker", "line", "characters", "setting"],
+                "additionalProperties": False,
             },
         },
-        "required": ["source", "scene", "title", "description", "tags", "shots"],
     },
+    "required": ["source", "scene", "title", "description", "tags", "shots"],
+    "additionalProperties": False,
 }
 
 
@@ -67,12 +67,13 @@ def write_script(config: dict, used_scenes: list[str]) -> dict:
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
     resp = client.messages.create(
         model=s["model"],
-        max_tokens=2000,
-        tools=[SCRIPT_TOOL],
-        tool_choice={"type": "tool", "name": "submit_script"},
+        max_tokens=16000,
+        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCRIPT_SCHEMA}},
         messages=[{"role": "user", "content": prompt}],
     )
-    script = next(b.input for b in resp.content if b.type == "tool_use")
+    if resp.stop_reason != "end_turn":
+        raise RuntimeError(f"Script request stopped early: {resp.stop_reason}")
+    script = json.loads(next(b.text for b in resp.content if b.type == "text"))
     _validate(script, config)
     return script
 
