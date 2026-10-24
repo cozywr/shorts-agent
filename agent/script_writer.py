@@ -1,95 +1,62 @@
-"""Asks Claude to pick a famous scene and write a short parody of it for our original characters."""
+"""Asks Claude to write an original Reddit-style story for the narrator to read."""
 import json
 
 import anthropic
 
-PROMPT = """You write scripts for a YouTube Shorts channel that re-enacts famous movie and TV scenes
-as cartoon parodies performed by our own ORIGINAL characters:
+PROMPT = """You write narration for a YouTube Shorts "Reddit story time" channel. Each video is a made-up
+story told like a viral Reddit post, read aloud by a narrator over video game footage.
 
-{cast}
-
-{pick}
+{idea}
 Rules:
-- It's a parody: keep the scene's setup and dramatic beats, but rewrite the dialogue as jokes that fit
-  our characters (e.g. the stakes become snacks, bedtime, a missing sock). Never copy more than a few
-  words of the original dialogue.
-- Never mention, describe or imitate the real actors or real show characters.
-- {min_shots}-{max_shots} shots, one spoken line per shot, at most {max_words} words in total.
-- Land a punchline in the final shot.
-- Keep every shot's `setting` family-friendly and visual: no weapons, blood, drugs or crime props
-  (an image safety filter rejects those). Swap them for silly stand-ins like snacks or toys.
-- Do NOT use any of these scenes again: {used}
+- The story is ORIGINAL fiction. Never retell or copy a real Reddit post, news story or real person.
+- First person, casual, like someone typing a post ("So this happened last week...").
+- The post title is the hook and is read aloud first: make it impossible to scroll past
+  (e.g. "Am I wrong for...", "My sister tried to...", "Today I messed up by..."). Under 100 characters.
+- The story is {min_words}-{max_words} words: hook in the first sentence, drama that escalates,
+  and a satisfying twist or payoff at the end. You may end with a short question that gets viewers commenting.
+- Advertiser-friendly: no sexual content, graphic violence, self-harm, drugs, slurs, swearing,
+  or real brands and people. Petty drama, family feuds, roommates, coworkers, weddings, neighbours,
+  and harmless revenge all work great.
+- Everything is read aloud, so write it as it should be spoken: no abbreviations like AITA or TIFU,
+  no emojis, hashtags or edit notes.
+- Don't repeat any of these earlier stories: {used}
 
-Reply with the finished script as JSON."""
+Reply with the finished story as JSON."""
 
-# Structured outputs constrain the reply to this schema, so quotes in dialogue can't break the JSON.
-SCRIPT_SCHEMA = {
+IDEA_ANY = "Come up with a fresh story idea."
+IDEA_GIVEN = "Write a story based on this idea: {idea}"
+
+# Structured outputs constrain the reply to this schema, so quotes in the story can't break the JSON.
+STORY_SCHEMA = {
     "type": "object",
     "properties": {
-        "source": {"type": "string", "description": "Show or movie title"},
-        "scene": {"type": "string", "description": "Short name of the famous scene"},
+        "post_title": {"type": "string", "description": "The Reddit-style post title, read aloud as the hook"},
+        "story": {"type": "string", "description": "The post body, read aloud after the title"},
+        "summary": {"type": "string", "description": "One sentence describing the story, to avoid repeats"},
         "title": {"type": "string", "description": "YouTube title under 80 characters, ends with #Shorts"},
-        "description": {"type": "string", "description": "1-2 sentences, says it is a parody with original characters"},
+        "description": {"type": "string", "description": "1-2 sentence YouTube description"},
         "tags": {"type": "array", "items": {"type": "string"}, "description": "5-10 tags"},
-        "shots": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "speaker": {"type": "string", "description": "character id"},
-                    "line": {"type": "string", "description": "spoken line"},
-                    "characters": {"type": "array", "items": {"type": "string"},
-                                   "description": "ids visible in the shot"},
-                    "setting": {"type": "string",
-                                "description": "where the shot takes place and what is happening, one sentence"},
-                },
-                "required": ["speaker", "line", "characters", "setting"],
-                "additionalProperties": False,
-            },
-        },
     },
-    "required": ["source", "scene", "title", "description", "tags", "shots"],
+    "required": ["post_title", "story", "summary", "title", "description", "tags"],
     "additionalProperties": False,
 }
 
 
-PICK_ANY = ("Pick one instantly recognizable scene from a famous movie or TV show and write a parody of it\n"
-            "starring these characters.")
-PICK_GIVEN = ("Write a parody of this scene, starring these characters: {scene}\n"
-              "Our cast always plays it: never use the real show's characters, even if named above.")
-
-
-def write_script(config: dict, used_scenes: list[str], scene: str | None = None) -> dict:
-    cast = "\n".join(
-        f"- id `{cid}`: {c['name']}, {c['look']}. Personality: {c['personality']}"
-        for cid, c in config["characters"].items()
-    )
-    s = config["script"]
+def write_story(config: dict, used: list[str], idea: str | None = None) -> dict:
+    s = config["story"]
     prompt = PROMPT.format(
-        cast=cast,
-        min_shots=s["min_shots"],
-        max_shots=s["max_shots"],
+        idea=IDEA_GIVEN.format(idea=idea) if idea else IDEA_ANY,
+        min_words=s["min_words"],
         max_words=s["max_words"],
-        used=", ".join(used_scenes) or "none yet",
-        pick=PICK_GIVEN.format(scene=scene) if scene else PICK_ANY,
+        used="; ".join(used[-50:]) or "none yet",
     )
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
     resp = client.messages.create(
         model=s["model"],
         max_tokens=16000,
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": SCRIPT_SCHEMA}},
+        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": STORY_SCHEMA}},
         messages=[{"role": "user", "content": prompt}],
     )
     if resp.stop_reason != "end_turn":
-        raise RuntimeError(f"Script request stopped early: {resp.stop_reason}")
-    script = json.loads(next(b.text for b in resp.content if b.type == "text"))
-    _validate(script, config)
-    return script
-
-
-def _validate(script: dict, config: dict) -> None:
-    ids = set(config["characters"])
-    for shot in script["shots"]:
-        if shot["speaker"] not in ids:
-            raise ValueError(f"Unknown speaker {shot['speaker']!r} in script")
-        shot["characters"] = [c for c in shot.get("characters", []) if c in ids] or [shot["speaker"]]
+        raise RuntimeError(f"Story request stopped early: {resp.stop_reason}")
+    return json.loads(next(b.text for b in resp.content if b.type == "text"))

@@ -3,3 +3,4 @@ __pycache__/
 .env
 client_secret*.json
 token*.json
+gameplay-download/
