@@ -26,7 +26,7 @@ def _request(prompt: str, config: dict) -> requests.Response:
     return requests.post(
         URL,
         headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}"},
-        json={"model": images.get("model", "gpt-image-1"), "prompt": prompt,
+        json={"model": images.get("model", "gpt-image-2"), "prompt": prompt,
               "size": "1024x1536", "quality": images.get("quality", "medium"), "n": 1},
         timeout=300,
     )
@@ -40,10 +40,15 @@ def _error(resp: requests.Response) -> str:
         return f"{resp.status_code}: {resp.text[:500]}"
 
 
+def _is_safety_block(resp: requests.Response) -> bool:
+    text = _error(resp).lower()
+    return "moderation" in text or "safety" in text
+
+
 def draw(shot: dict, config: dict, out: Path) -> Path:
     resp = _request(build_prompt(shot, config), config)
-    if resp.status_code == 400:
-        print(f"  image rejected ({_error(resp)}), retrying with a simpler scene")
+    if resp.status_code == 400 and _is_safety_block(resp):
+        print(f"  image blocked by the safety filter ({_error(resp)}), retrying with a simpler scene")
         resp = _request(build_prompt(shot, config, safe=True), config)
     if not resp.ok:
         raise RuntimeError(f"OpenAI image request failed: {_error(resp)}")
