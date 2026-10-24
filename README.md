@@ -42,7 +42,9 @@ the three API keys and `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_RE
 Never paste them in a chat or commit them.
 
 ## Running it
-- **Test without posting:** Actions tab → *Daily Short* → *Run workflow* → tick *dry run*.
+- **Test without posting:** Actions tab → *Daily Short* → *Run workflow*. *Dry run* is ticked by default.
+  Type a scene in the *Scene* box (e.g. `Breaking Bad, the I am the one who knocks scene`) or leave it
+  empty and Claude picks one. Our own characters always play it.
   The finished video is attached to the run under *Artifacts*.
 - **Daily:** it runs automatically at 16:00 UTC. Change the `cron` line in
   `.github/workflows/daily-short.yml` to pick another time.

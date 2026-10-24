@@ -2,6 +2,7 @@
 
     python -m agent.main            # full run, uploads to YouTube
     python -m agent.main --dry-run  # makes the video but does not upload
+    python -m agent.main --scene "Breaking Bad, the I am the one who knocks scene"
 """
 import argparse
 import json
@@ -20,7 +21,7 @@ ROOT = Path(__file__).resolve().parent.parent
 YOUTUBE_SECRETS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
 
 
-def run(dry_run: bool) -> None:
+def run(dry_run: bool, scene: str | None = None) -> None:
     # Check before spending money on the script, voices and images.
     missing = [name for name in YOUTUBE_SECRETS if not os.environ.get(name)]
     if missing and not dry_run:
@@ -35,7 +36,7 @@ def run(dry_run: bool) -> None:
     workdir.mkdir(parents=True, exist_ok=True)
 
     used = [f"{h['source']}: {h['scene']}" for h in history["scenes"]]
-    script = script_writer.write_script(config, used)
+    script = script_writer.write_script(config, used, scene)
     (workdir / "script.json").write_text(json.dumps(script, indent=2))
     print(f"Scene: {script['source']} - {script['scene']}")
 
@@ -64,4 +65,7 @@ def run(dry_run: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
-    run(parser.parse_args().dry_run)
+    parser.add_argument("--scene", default=os.environ.get("SCENE") or None,
+                        help='e.g. "Breaking Bad, the I am the one who knocks scene"; empty lets Claude pick')
+    args = parser.parse_args()
+    run(args.dry_run, args.scene)

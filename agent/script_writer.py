@@ -8,8 +8,8 @@ as cartoon parodies performed by our own ORIGINAL characters:
 
 {cast}
 
-Pick one instantly recognizable scene from a famous movie or TV show and write a parody of it
-starring these characters. Rules:
+{pick}
+Rules:
 - It's a parody: keep the scene's setup and dramatic beats, but rewrite the dialogue as jokes that fit
   our characters (e.g. the stakes become snacks, bedtime, a missing sock). Never copy more than a few
   words of the original dialogue.
@@ -53,7 +53,13 @@ SCRIPT_SCHEMA = {
 }
 
 
-def write_script(config: dict, used_scenes: list[str]) -> dict:
+PICK_ANY = ("Pick one instantly recognizable scene from a famous movie or TV show and write a parody of it\n"
+            "starring these characters.")
+PICK_GIVEN = ("Write a parody of this scene, starring these characters: {scene}\n"
+              "Our cast always plays it: never use the real show's characters, even if named above.")
+
+
+def write_script(config: dict, used_scenes: list[str], scene: str | None = None) -> dict:
     cast = "\n".join(
         f"- id `{cid}`: {c['name']}, {c['look']}. Personality: {c['personality']}"
         for cid, c in config["characters"].items()
@@ -65,6 +71,7 @@ def write_script(config: dict, used_scenes: list[str]) -> dict:
         max_shots=s["max_shots"],
         max_words=s["max_words"],
         used=", ".join(used_scenes) or "none yet",
+        pick=PICK_GIVEN.format(scene=scene) if scene else PICK_ANY,
     )
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
     resp = client.messages.create(
