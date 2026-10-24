@@ -36,7 +36,7 @@ script:
   max_words: 120          # ~45 seconds of speech
 
 images:
-  model: gpt-image-1
+  model: gpt-image-2     # gpt-image-1 was shut down by OpenAI on 2026-10-23
   quality: medium     # low | medium | high
 
 video:
