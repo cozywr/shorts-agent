@@ -8,7 +8,11 @@ on:
       dry_run:
         description: "Make the video but don't upload it"
         type: boolean
-        default: false
+        default: true
+      scene:
+        description: "Scene to parody (optional), e.g. Breaking Bad, the I am the one who knocks scene"
+        type: string
+        default: ""
 
 permissions:
   contents: write            # to commit history.json so scenes never repeat
@@ -32,6 +36,7 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          SCENE: ${{ inputs.scene }}
         run: python -m agent.main ${{ inputs.dry_run && '--dry-run' || '' }}
       - name: Keep the video so you can watch it
         if: always()

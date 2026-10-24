@@ -2,9 +2,12 @@
 
     python -m agent.main            # full run, uploads to YouTube
     python -m agent.main --dry-run  # makes the video but does not upload
+    python -m agent.main --scene "Breaking Bad, the I am the one who knocks scene"
 """
 import argparse
 import json
+import os
+import sys
 from datetime import date
 from pathlib import Path
 
@@ -15,7 +18,16 @@ from agent import script_writer, uploader, video, visuals, voices
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def run(dry_run: bool) -> None:
+YOUTUBE_SECRETS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
+
+
+def run(dry_run: bool, scene: str | None = None) -> None:
+    # Check before spending money on the script, voices and images.
+    missing = [name for name in YOUTUBE_SECRETS if not os.environ.get(name)]
+    if missing and not dry_run:
+        sys.exit(f"Can't upload to YouTube: these secrets aren't set yet: {', '.join(missing)}. "
+                 "Add them (README step 3-4) or run with dry run ticked.")
+
     config = yaml.safe_load((ROOT / "config.yaml").read_text())
     history_file = ROOT / "history.json"
     history = json.loads(history_file.read_text())
@@ -24,7 +36,7 @@ def run(dry_run: bool) -> None:
     workdir.mkdir(parents=True, exist_ok=True)
 
     used = [f"{h['source']}: {h['scene']}" for h in history["scenes"]]
-    script = script_writer.write_script(config, used)
+    script = script_writer.write_script(config, used, scene)
     (workdir / "script.json").write_text(json.dumps(script, indent=2))
     print(f"Scene: {script['source']} - {script['scene']}")
 
@@ -32,6 +44,8 @@ def run(dry_run: bool) -> None:
     for i, shot in enumerate(script["shots"]):
         shot["audio"] = voices.speak(shot["line"], voice_ids[shot["speaker"]], workdir / f"line_{i:02}.mp3")
         shot["image"] = visuals.draw(shot, config, workdir / f"shot_{i:02}.png")
+        if config["video"].get("lip_flaps", True):
+            shot["mouth_open"] = visuals.draw_mouth_open(shot, config, shot["image"], workdir / f"shot_{i:02}_open.png")
         print(f"  shot {i + 1}/{len(script['shots'])} ready")
 
     v = config["video"]
@@ -51,4 +65,7 @@ def run(dry_run: bool) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
-    run(parser.parse_args().dry_run)
+    parser.add_argument("--scene", default=os.environ.get("SCENE") or None,
+                        help='e.g. "Breaking Bad, the I am the one who knocks scene"; empty lets Claude pick')
+    args = parser.parse_args()
+    run(args.dry_run, args.scene)

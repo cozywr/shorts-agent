@@ -42,6 +42,7 @@ images:
 video:
   max_seconds: 59
   pause_between_lines: 0.3
+  lip_flaps: true          # speaker's mouth flaps open/closed with their voice (one extra image per shot)
 
 youtube:
   # "private" lets you review each Short in YouTube Studio before publishing.
