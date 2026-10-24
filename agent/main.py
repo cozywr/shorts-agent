@@ -28,9 +28,9 @@ def run(dry_run: bool) -> None:
     (workdir / "script.json").write_text(json.dumps(script, indent=2))
     print(f"Scene: {script['source']} - {script['scene']}")
 
+    voice_ids = voices.ensure_voices(config, ROOT / "voices.json")
     for i, shot in enumerate(script["shots"]):
-        voice_id = config["characters"][shot["speaker"]]["voice_id"]
-        shot["audio"] = voices.speak(shot["line"], voice_id, workdir / f"line_{i:02}.mp3")
+        shot["audio"] = voices.speak(shot["line"], voice_ids[shot["speaker"]], workdir / f"line_{i:02}.mp3")
         shot["image"] = visuals.draw(shot, config, workdir / f"shot_{i:02}.png")
         print(f"  shot {i + 1}/{len(script['shots'])} ready")
 

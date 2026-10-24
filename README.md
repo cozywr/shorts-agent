@@ -21,9 +21,10 @@ It runs on a schedule in GitHub Actions, so nothing needs to stay on in your hou
 | `ELEVENLABS_API_KEY` | elevenlabs.io → Profile → API key (Starter plan is enough) |
 
 ### 2. Character voices
-In ElevenLabs open **Voice Design** and create one new voice per character from its personality in
-`config.yaml` (e.g. "deep, slow, calm, menacing female boss"). Copy each voice's ID into its
-`voice_id` line in `config.yaml`. Design new voices; don't clone a real person's voice.
+Nothing to do. On the first run the agent designs a brand-new voice for each character in
+ElevenLabs from the `voice` description in `config.yaml`, and saves their IDs in `voices.json`.
+Your ElevenLabs API key needs the Text to Speech, Voices (write) and Voice Generation permissions.
+To change a voice, edit its description and delete that character's line from `voices.json`.
 
 ### 3. YouTube access
 1. In console.cloud.google.com create a project and enable **YouTube Data API v3**.
