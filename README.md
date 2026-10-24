@@ -6,6 +6,8 @@ Every day this agent:
    original characters: Pickle Pete, Big Mama Muffin, Sir Waddles and Zip (see `config.yaml`).
 2. **Voices it** with each character's own AI voice (ElevenLabs).
 3. **Draws each shot** as a vertical cartoon frame (OpenAI image generation).
+   It also draws a second version with the speaker's mouth open, and the video flaps between
+   the two in time with the voice, so the character visibly talks (`video.lip_flaps` in `config.yaml`).
 4. **Edits the Short**: 1080x1920, slow zoom on each frame, captions, under 60 seconds (ffmpeg).
 5. **Uploads it** to your channel through the YouTube Data API.
 

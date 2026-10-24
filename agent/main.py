@@ -32,6 +32,8 @@ def run(dry_run: bool) -> None:
     for i, shot in enumerate(script["shots"]):
         shot["audio"] = voices.speak(shot["line"], voice_ids[shot["speaker"]], workdir / f"line_{i:02}.mp3")
         shot["image"] = visuals.draw(shot, config, workdir / f"shot_{i:02}.png")
+        if config["video"].get("lip_flaps", True):
+            shot["mouth_open"] = visuals.draw_mouth_open(shot, config, shot["image"], workdir / f"shot_{i:02}_open.png")
         print(f"  shot {i + 1}/{len(script['shots'])} ready")
 
     v = config["video"]
