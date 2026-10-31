@@ -104,17 +104,19 @@ def _slice_start(clip_seconds: float, length: float, parts: list[tuple[float, fl
     return None
 
 
-def assemble(gameplay: Path, narration: Path, alignment: dict, title_chars: int, card: Path,
+def assemble(gameplay: Path, narration: Path, alignment: dict, title_chars: int, card: Path | None,
              workdir: Path, out: Path, settings: dict, parts: list[tuple[float, float]] | None = None) -> Path:
-    """Narration is the post title followed by the story; the card shows while the title is read.
-    `parts` are the (start, end) seconds of the clip that are actual gameplay."""
+    """Narration is the post title followed by the story. With a card, it shows while the title is read;
+    without one, the title gets captions like the rest. `parts` are the (start, end) seconds of the clip
+    that are actual gameplay."""
     max_seconds = settings["max_seconds"]
+    base_speed = settings.get("speed", 1.0)
     spoken = duration(narration)
-    speed = min(max(spoken / max_seconds, 1.0), MAX_SPEEDUP)
+    speed = min(max(spoken / max_seconds, base_speed), max(base_speed, MAX_SPEEDUP))
     length = min(spoken / speed, max_seconds)
 
     title_end = alignment["character_end_times_seconds"][title_chars - 1] / speed
-    subs = captions(words(alignment, title_chars), speed, workdir / "captions.ass")
+    subs = captions(words(alignment, title_chars if card else 0), speed, workdir / "captions.ass")
 
     info = _probe(gameplay)
     clip_seconds = float(info["format"]["duration"])
@@ -132,10 +134,13 @@ def assemble(gameplay: Path, narration: Path, alignment: dict, title_chars: int,
         audio = f"{voice};[0:a]volume={volume}[game];[voice][game]amix=inputs=2:duration=first:normalize=0[a]"
     else:
         audio = voice.replace("[voice]", "[a]")
-    video = (f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps={FPS}[bg];"
-             f"[bg][2:v]overlay=(W-w)/2:(H-h)/2:enable='lt(t,{title_end:.3f})'[withcard];"
-             f"[withcard]subtitles=filename='{subs}'[v]")
-    _run("ffmpeg", "-y", *game_in, "-i", str(narration), "-loop", "1", "-i", str(card),
+    video = f"[0:v]scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,setsar=1,fps={FPS}[bg];"
+    card_in = []
+    if card:
+        card_in = ["-loop", "1", "-i", str(card)]
+        video += f"[bg][2:v]overlay=(W-w)/2:(H-h)/2:enable='lt(t,{title_end:.3f})'[bg];"
+    video += f"[bg]subtitles=filename='{subs}'[v]"
+    _run("ffmpeg", "-y", *game_in, "-i", str(narration), *card_in,
          "-filter_complex", f"{video};{audio}", "-map", "[v]", "-map", "[a]", "-t", f"{length:.3f}",
          "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p", "-r", str(FPS),
          "-c:a", "aac", "-ar", "44100", "-ac", "2", "-movflags", "+faststart", str(out))

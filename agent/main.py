@@ -59,7 +59,9 @@ def run(dry_run: bool, idea: str | None = None) -> None:
     narration_text = f"{spoken_title}\n\n{voices.say_as(story['story'], config)}"
     alignment = voices.speak(narration_text, voice_id, workdir / "narration.mp3")
 
-    post_card = card.draw(story["post_title"], config["card"]["channel_name"], workdir / "card.png")
+    post_card = None
+    if config["card"].get("show", True):
+        post_card = card.draw(story["post_title"], config["card"]["channel_name"], workdir / "card.png")
     final = video.assemble(clip, workdir / "narration.mp3", alignment, len(spoken_title), post_card,
                            workdir, workdir / "short.mp4", config["video"], gameplay.good_parts(clip, config))
     print(f"Video: {final}")

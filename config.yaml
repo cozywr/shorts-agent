@@ -23,6 +23,7 @@ narrator:
     WIBTA: Would I be the asshole
 
 card:
+  show: false              # true shows a white post card with the title at the start
   channel_name: Story Time   # shown on the post card at the start of each video
 
 gameplay:
@@ -34,6 +35,7 @@ gameplay:
     2026-10-24.16-47-18.mp4: ["1:35-7:25", "7:40-9:20", "10:35-15:20", "19:50-23:35", "24:20-27:35"]
 
 video:
+  speed: 1.15             # narration speed (1 = as recorded); captions stay in sync
   max_seconds: 179        # Shorts can be up to 3 minutes; longer stories are read faster, then cut
   gameplay_volume: 0       # 0 mutes the game; try 0.1 to keep quiet game sound under the voice
 
