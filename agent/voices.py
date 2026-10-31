@@ -70,7 +70,8 @@ def say_as(text: str, config: dict) -> str:
     """Swaps written shorthand for how it should be read aloud (narrator.say_as in config.yaml)."""
     for written, spoken in (config["narrator"].get("say_as") or {}).items():
         text = re.sub(rf"(?<!\w){re.escape(written)}(?!\w)", spoken, text)
-    return text
+    # Emoji can't be read aloud and show up as empty boxes in the captions.
+    return re.sub(r" ?[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]+", "", text)
 
 
 def speak(text: str, voice_id: str, out: Path) -> dict:
