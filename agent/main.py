@@ -1,4 +1,4 @@
-"""Daily run: write a story, narrate it, lay it over gameplay with captions, upload it.
+"""Daily run: take your next story (or write one), narrate it, lay it over gameplay with captions, upload it.
 
     python -m agent.main            # full run, uploads to YouTube
     python -m agent.main --dry-run  # makes the video but does not upload
@@ -13,7 +13,7 @@ from pathlib import Path
 
 import yaml
 
-from agent import card, gameplay, script_writer, uploader, video, voices
+from agent import card, gameplay, script_writer, stories, uploader, video, voices
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -36,12 +36,21 @@ def run(dry_run: bool, idea: str | None = None) -> None:
     workdir = ROOT / "output" / date.today().isoformat()
     workdir.mkdir(parents=True, exist_ok=True)
 
+    own = stories.next_story(ROOT)
+    if not own and not config["story"].get("auto_write", True):
+        sys.exit("No stories left in the stories folder. Add one (see stories/README.md) and run again.")
+
     downloads = ROOT / "gameplay-download"  # kept out of output/ so big clips don't go in the video download
     downloads.mkdir(exist_ok=True)
     clip = gameplay.pick(ROOT, downloads, config["gameplay"]["release_tag"])
     print(f"Gameplay: {clip.name}")
 
-    story = script_writer.write_story(config, [h["summary"] for h in history["stories"]], idea)
+    if own:
+        post_title, body = stories.read(own)
+        story = {"post_title": post_title, "story": body, **script_writer.describe(config, post_title, body)}
+        print(f"Using your story {own.name}")
+    else:
+        story = script_writer.write_story(config, [h["summary"] for h in history["stories"]], idea)
     (workdir / "story.json").write_text(json.dumps(story, indent=2))
     print(f"Story: {story['post_title']} ({len(story['story'].split())} words)")
 
@@ -59,6 +68,8 @@ def run(dry_run: bool, idea: str | None = None) -> None:
     url = uploader.upload(final, story, config)
     print(f"Uploaded: {url}")
 
+    if own:
+        stories.mark_used(own)
     history["stories"].append({"date": date.today().isoformat(), "post_title": story["post_title"],
                                "summary": story["summary"], "url": url})
     history_file.write_text(json.dumps(history, indent=2) + "\n")

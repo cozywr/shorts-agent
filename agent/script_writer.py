@@ -42,6 +42,41 @@ STORY_SCHEMA = {
 }
 
 
+DESCRIBE_PROMPT = """Here is a story for a YouTube Shorts "Reddit story time" channel, read aloud over
+video game footage. Don't change the story. Write the YouTube details for it.
+
+Post title: {post_title}
+
+{story}
+
+Reply as JSON."""
+
+DESCRIBE_SCHEMA = {
+    "type": "object",
+    "properties": {k: STORY_SCHEMA["properties"][k] for k in ("summary", "title", "description", "tags")},
+    "required": ["summary", "title", "description", "tags"],
+    "additionalProperties": False,
+}
+
+
+def _ask(config: dict, prompt: str, schema: dict) -> dict:
+    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
+    resp = client.messages.create(
+        model=config["story"]["model"],
+        max_tokens=16000,
+        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": schema}},
+        messages=[{"role": "user", "content": prompt}],
+    )
+    if resp.stop_reason != "end_turn":
+        raise RuntimeError(f"Story request stopped early: {resp.stop_reason}")
+    return json.loads(next(b.text for b in resp.content if b.type == "text"))
+
+
+def describe(config: dict, post_title: str, story: str) -> dict:
+    """YouTube title, description, tags and a summary for a story someone wrote themselves."""
+    return _ask(config, DESCRIBE_PROMPT.format(post_title=post_title, story=story), DESCRIBE_SCHEMA)
+
+
 def write_story(config: dict, used: list[str], idea: str | None = None) -> dict:
     s = config["story"]
     prompt = PROMPT.format(
@@ -50,13 +85,4 @@ def write_story(config: dict, used: list[str], idea: str | None = None) -> dict:
         max_words=s["max_words"],
         used="; ".join(used[-50:]) or "none yet",
     )
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
-    resp = client.messages.create(
-        model=s["model"],
-        max_tokens=16000,
-        output_config={"effort": "medium", "format": {"type": "json_schema", "schema": STORY_SCHEMA}},
-        messages=[{"role": "user", "content": prompt}],
-    )
-    if resp.stop_reason != "end_turn":
-        raise RuntimeError(f"Story request stopped early: {resp.stop_reason}")
-    return json.loads(next(b.text for b in resp.content if b.type == "text"))
+    return _ask(config, prompt, STORY_SCHEMA)

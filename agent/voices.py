@@ -27,16 +27,17 @@ def _design(name: str, description: str) -> str:
 
 
 def ensure_narrator(config: dict, voices_file: Path) -> str:
-    """Returns the narrator's voice id, designing the voice on the first run."""
+    """Returns the narrator's voice id, designing a new voice whenever its description changes."""
     n = config["narrator"]
     if n.get("voice_id"):
         return n["voice_id"]
     voices = json.loads(voices_file.read_text()) if voices_file.exists() else {}
-    if "narrator" not in voices:
-        voices["narrator"] = _design(f"Shorts - {n['name']}", n["voice"])
+    saved = voices.get("narrator")
+    if not isinstance(saved, dict) or saved.get("voice") != n["voice"]:
+        voices["narrator"] = {"id": _design(f"Shorts - {n['name']}", n["voice"]), "voice": n["voice"]}
         print("Designed a new narrator voice")
         voices_file.write_text(json.dumps(voices, indent=2) + "\n")
-    return voices["narrator"]
+    return voices["narrator"]["id"]
 
 
 def speak(text: str, voice_id: str, out: Path) -> dict:
