@@ -27,8 +27,8 @@ narrator:
 extra_voices:
   creepy:
     name: Creepy Narrator
-    voice_id: ""
-    library_owner_id: ""
+    voice_id: mpHKakCHjcnpaDuRTKqK          # Jared Wayne (picked from Voice samples)
+    library_owner_id: 963890fe7fad6c0449c74f991c6202f9625a9565f95d682c825da5785dd3210e
 
 card:
   show: false              # true shows a white post card with the title at the start
