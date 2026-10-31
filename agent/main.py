@@ -55,12 +55,13 @@ def run(dry_run: bool, idea: str | None = None) -> None:
     print(f"Story: {story['post_title']} ({len(story['story'].split())} words)")
 
     voice_id = voices.ensure_narrator(config, ROOT / "voices.json")
-    narration_text = f"{story['post_title']}\n\n{story['story']}"
+    spoken_title = voices.say_as(story["post_title"], config)
+    narration_text = f"{spoken_title}\n\n{voices.say_as(story['story'], config)}"
     alignment = voices.speak(narration_text, voice_id, workdir / "narration.mp3")
 
     post_card = card.draw(story["post_title"], config["card"]["channel_name"], workdir / "card.png")
-    final = video.assemble(clip, workdir / "narration.mp3", alignment, len(story["post_title"]), post_card,
-                           workdir, workdir / "short.mp4", config["video"])
+    final = video.assemble(clip, workdir / "narration.mp3", alignment, len(spoken_title), post_card,
+                           workdir, workdir / "short.mp4", config["video"], gameplay.good_parts(clip, config))
     print(f"Video: {final}")
 
     if dry_run:

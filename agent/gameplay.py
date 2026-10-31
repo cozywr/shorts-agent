@@ -50,3 +50,16 @@ def pick(root: Path, workdir: Path, release_tag: str) -> Path:
         return clip
     print(f"Downloading gameplay clip {clip['name']}")
     return _download(clip, workdir)
+
+
+def _seconds(stamp: str) -> float:
+    total = 0.0
+    for piece in stamp.strip().split(":"):
+        total = total * 60 + float(piece)
+    return total
+
+
+def good_parts(clip: Path, config: dict) -> list[tuple[float, float]]:
+    """The parts of this clip listed under gameplay.good_parts in config.yaml, as (start, end) seconds."""
+    ranges = (config["gameplay"].get("good_parts") or {}).get(clip.name, [])
+    return [tuple(_seconds(x) for x in r.split("-")) for r in ranges]

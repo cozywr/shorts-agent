@@ -1,0 +1,25 @@
+name: Voice samples
+
+on:
+  workflow_dispatch:         # Actions tab → Voice samples → Run workflow
+
+jobs:
+  samples:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: Download voice previews
+        env:
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+        run: python tools/voice_samples.py
+      - name: Keep the samples so you can listen
+        uses: actions/upload-artifact@v4
+        with:
+          name: voice-samples
+          path: output/voice-samples/
+          retention-days: 14
