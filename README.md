@@ -20,7 +20,10 @@ It runs on a schedule in GitHub Actions, so nothing needs to stay on in your hou
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys |
 | `ELEVENLABS_API_KEY` | elevenlabs.io → Profile → API key (Starter plan is enough) |
 
-The narrator voice is designed automatically from its description in `config.yaml` (`narrator`)
+To pick the narrator by ear: Actions tab → **Voice samples** → **Run workflow**, then download
+*voice-samples* from the finished run and listen. Put your favourite's `voice_id` and
+`library_owner_id` (from `voices.txt`) under `narrator` in `config.yaml`.
+Otherwise the narrator voice is designed automatically from its description in `config.yaml` (`narrator`)
 and saved in `voices.json`. Change the description and a new voice is made on the next run.
 
 ### 2. Gameplay clips
@@ -34,6 +37,10 @@ Longer recordings are best: each video uses a random ~1 minute slice. Landscape 
 4. Drag your video files (mp4, mov, mkv, webm) into the box that says *Attach binaries*.
    Each file can be up to 2 GB. Wait until every file finishes uploading.
 5. Click **Publish release**.
+
+After uploading a new recording, list the parts that are real gameplay under `gameplay.good_parts`
+in `config.yaml` (minutes:seconds), so menus and end screens never show. Unlisted clips skip
+their first and last minute.
 
 To add more later: open the release, click the pencil (Edit), drag more files in, and click **Update release**.
 Small clips (under 25 MB) can also go in a `gameplay/` folder in the repo instead.

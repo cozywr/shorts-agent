@@ -87,9 +87,27 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
     return out
 
 
+def _slice_start(clip_seconds: float, length: float, parts: list[tuple[float, float]]) -> float | None:
+    """Random start inside a part of the clip that is real gameplay, or None to loop the whole clip."""
+    if not parts:
+        edge = min(60.0, clip_seconds * 0.1)  # recordings usually start and end in menus
+        parts = [(edge, clip_seconds - edge)]
+    parts = [(a, min(b, clip_seconds)) for a, b in parts]
+    fitting = [(a, b) for a, b in parts if b - a >= length]
+    if fitting:
+        a, b = random.choice(fitting)
+        return random.uniform(a, b - length)
+    if clip_seconds > length + 1:
+        # No part is long enough for this story: start at the longest one and let it run on.
+        a, b = max(parts, key=lambda p: p[1] - p[0])
+        return min(a, clip_seconds - length - 1)
+    return None
+
+
 def assemble(gameplay: Path, narration: Path, alignment: dict, title_chars: int, card: Path,
-             workdir: Path, out: Path, settings: dict) -> Path:
-    """Narration is the post title followed by the story; the card shows while the title is read."""
+             workdir: Path, out: Path, settings: dict, parts: list[tuple[float, float]] | None = None) -> Path:
+    """Narration is the post title followed by the story; the card shows while the title is read.
+    `parts` are the (start, end) seconds of the clip that are actual gameplay."""
     max_seconds = settings["max_seconds"]
     spoken = duration(narration)
     speed = min(max(spoken / max_seconds, 1.0), MAX_SPEEDUP)
@@ -101,8 +119,10 @@ def assemble(gameplay: Path, narration: Path, alignment: dict, title_chars: int,
     info = _probe(gameplay)
     clip_seconds = float(info["format"]["duration"])
     game_has_audio = any(s["codec_type"] == "audio" for s in info["streams"])
-    if clip_seconds > length + 1:
-        game_in = ["-ss", f"{random.uniform(0, clip_seconds - length - 1):.2f}", "-i", str(gameplay)]
+    start = _slice_start(clip_seconds, length, parts or [])
+    if start is not None:
+        print(f"Gameplay from {int(start) // 60}:{int(start) % 60:02}")
+        game_in = ["-ss", f"{start:.2f}", "-i", str(gameplay)]
     else:
         game_in = ["-stream_loop", "-1", "-i", str(gameplay)]
 

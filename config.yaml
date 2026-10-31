@@ -11,17 +11,27 @@ story:
 
 narrator:
   name: Story Narrator
-  # Designed once in ElevenLabs from this description; the ID is saved in voices.json.
-  # Change the description and a new voice is designed on the next run.
-  # Or set voice_id to any voice in your ElevenLabs library to use that instead.
+  # To use a voice picked from the "Voice samples" run, set voice_id and library_owner_id
+  # from its line in voices.txt. Otherwise a voice is designed from the description below.
   voice: A young adult female voice, American accent, casual and expressive storyteller, clear and fast-paced, slightly dramatic, great for viral story narration
   voice_id: ""
+  library_owner_id: ""
+  # How shorthand is read aloud. The card still shows what you wrote; the captions show what's said.
+  say_as:
+    AITA: Am I the asshole
+    AITAH: Am I the asshole
+    WIBTA: Would I be the asshole
 
 card:
   channel_name: Story Time   # shown on the post card at the start of each video
 
 gameplay:
   release_tag: gameplay    # the GitHub release you upload gameplay videos to (README step 2)
+  # The parts of each recording that are actual gameplay (minutes:seconds), so menus,
+  # hero select and end-of-match screens never show. A clip not listed here skips its first
+  # and last minute.
+  good_parts:
+    2026-10-24.16-47-18.mp4: ["1:35-7:25", "7:40-9:20", "10:35-15:20", "19:50-23:35", "24:20-27:35"]
 
 video:
   max_seconds: 179        # Shorts can be up to 3 minutes; longer stories are read faster, then cut
