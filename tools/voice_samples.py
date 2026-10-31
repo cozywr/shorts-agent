@@ -1,7 +1,9 @@
-"""Downloads preview clips of female narrator voices from ElevenLabs so you can pick one by ear.
+"""Downloads preview clips of narrator voices from ElevenLabs so you can pick one by ear.
 
-Run by the "Voice samples" workflow. The clips land in output/voice-samples/, numbered,
-with voices.txt listing each number's voice_id and library_owner_id for config.yaml.
+Run by the "Voice samples" workflow. SEARCH (e.g. "creepy horror") and GENDER (female, male or any)
+narrow the Voice Library; with no search it lists popular female storytellers.
+The clips land in output/voice-samples/, numbered, with voices.txt listing each number's
+voice_id and library_owner_id for config.yaml.
 """
 import os
 import re
@@ -12,11 +14,18 @@ import requests
 API = "https://api.elevenlabs.io/v1"
 HEADERS = {"xi-api-key": os.environ["ELEVENLABS_API_KEY"]}
 OUT = Path("output/voice-samples")
+SEARCH = os.environ.get("SEARCH", "").strip()
+GENDER = os.environ.get("GENDER", "female").strip().lower()
 
 
-def _library(use_case: str, count: int) -> list[dict]:
-    params = {"gender": "female", "language": "en", "use_cases": use_case, "page_size": count,
-              "sort": "trending"}
+def _library(count: int, use_case: str | None = None, search: str | None = None) -> list[dict]:
+    params = {"language": "en", "page_size": count, "sort": "trending"}
+    if GENDER in ("female", "male"):
+        params["gender"] = GENDER
+    if use_case:
+        params["use_cases"] = use_case
+    if search:
+        params["search"] = search
     resp = requests.get(f"{API}/shared-voices", headers=HEADERS, params=params, timeout=60)
     if resp.status_code >= 400:  # fall back to the default order if this sort isn't accepted
         params.pop("sort")
@@ -33,16 +42,22 @@ def _premade() -> list[dict]:
     return [{"name": v["name"], "voice_id": v["voice_id"], "owner": "", "preview": v.get("preview_url"),
              "about": v.get("description") or ""}
             for v in resp.json()["voices"]
-            if v.get("category") == "premade" and (v.get("labels") or {}).get("gender") == "female"]
+            if v.get("category") == "premade" and (v.get("labels") or {}).get("gender") == GENDER]
 
 
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
+    if SEARCH:
+        found = _library(12, search=SEARCH) + _library(8, use_case="narrative_story", search=SEARCH)
+    else:
+        found = _library(8, "narrative_story") + _library(6, "social_media") + _premade()
     seen, picks = set(), []
-    for voice in _library("narrative_story", 8) + _library("social_media", 6) + _premade():
+    for voice in found:
         if voice["voice_id"] not in seen and voice["preview"]:
             seen.add(voice["voice_id"])
             picks.append(voice)
+    if not picks:
+        raise SystemExit(f"No voices found for {SEARCH!r}. Try a simpler search, like 'horror'.")
     lines = []
     for i, v in enumerate(picks, 1):
         name = re.sub(r"[^\w -]+", "", v["name"])[:40].strip()

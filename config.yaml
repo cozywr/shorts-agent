@@ -22,6 +22,14 @@ narrator:
     AITAH: Am I the asshole
     WIBTA: Would I be the asshole
 
+# Other voices a story can use: start the story file with a line like "voice: creepy".
+# Pick one by ear with the Voice samples workflow, then fill in voice_id and library_owner_id.
+extra_voices:
+  creepy:
+    name: Creepy Narrator
+    voice_id: ""
+    library_owner_id: ""
+
 card:
   show: false              # true shows a white post card with the title at the start
   channel_name: Story Time   # shown on the post card at the start of each video

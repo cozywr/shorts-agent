@@ -2,6 +2,16 @@ name: Voice samples
 
 on:
   workflow_dispatch:         # Actions tab → Voice samples → Run workflow
+    inputs:
+      search:
+        description: "Kind of voice (optional), e.g. creepy horror"
+        type: string
+        default: ""
+      gender:
+        description: "Voice gender"
+        type: choice
+        options: [female, male, any]
+        default: female
 
 jobs:
   samples:
@@ -16,6 +26,8 @@ jobs:
       - name: Download voice previews
         env:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          SEARCH: ${{ inputs.search }}
+          GENDER: ${{ inputs.gender }}
         run: python tools/voice_samples.py
       - name: Keep the samples so you can listen
         uses: actions/upload-artifact@v4

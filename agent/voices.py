@@ -37,25 +37,33 @@ def _add_from_library(owner_id: str, voice_id: str, name: str) -> str:
     return resp.json()["voice_id"]
 
 
-def ensure_narrator(config: dict, voices_file: Path) -> str:
-    """Returns the narrator's voice id: a picked voice (voice_id), or one designed from the description.
+def ensure_narrator(config: dict, voices_file: Path, which: str = "narrator") -> str:
+    """Returns the voice id for the narrator, or for one of config's extra_voices (e.g. "creepy"):
+    a picked voice (voice_id), or one designed from its description.
     A new voice is set up whenever the choice in config.yaml changes."""
-    n = config["narrator"]
+    if which == "narrator":
+        n = config["narrator"]
+    elif which in (config.get("extra_voices") or {}):
+        n = config["extra_voices"][which]
+    else:
+        raise SystemExit(f"The story asks for voice {which!r}, but config.yaml has no voice by that name.")
+    if not n.get("voice_id") and not n.get("voice"):
+        raise SystemExit(f"The {which!r} voice hasn't been picked yet: set its voice_id in config.yaml.")
     if n.get("voice_id") and not n.get("library_owner_id"):
         return n["voice_id"]
     source = f"library:{n['library_owner_id']}/{n['voice_id']}" if n.get("voice_id") else n["voice"]
     voices = json.loads(voices_file.read_text()) if voices_file.exists() else {}
-    saved = voices.get("narrator")
+    saved = voices.get(which)
     if not isinstance(saved, dict) or saved.get("voice") != source:
         if n.get("voice_id"):
             voice_id = _add_from_library(n["library_owner_id"], n["voice_id"], f"Shorts - {n['name']}")
-            print("Added the narrator voice from the Voice Library")
+            print(f"Added the {which} voice from the Voice Library")
         else:
             voice_id = _design(f"Shorts - {n['name']}", n["voice"])
-            print("Designed a new narrator voice")
-        voices["narrator"] = {"id": voice_id, "voice": source}
+            print(f"Designed a new {which} voice")
+        voices[which] = {"id": voice_id, "voice": source}
         voices_file.write_text(json.dumps(voices, indent=2) + "\n")
-    return voices["narrator"]["id"]
+    return voices[which]["id"]
 
 
 def say_as(text: str, config: dict) -> str:

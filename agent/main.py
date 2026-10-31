@@ -46,15 +46,16 @@ def run(dry_run: bool, idea: str | None = None) -> None:
     print(f"Gameplay: {clip.name}")
 
     if own:
-        post_title, body = stories.read(own)
+        post_title, body, which_voice = stories.read(own)
         story = {"post_title": post_title, "story": body, **script_writer.describe(config, post_title, body)}
         print(f"Using your story {own.name}")
     else:
+        which_voice = "narrator"
         story = script_writer.write_story(config, [h["summary"] for h in history["stories"]], idea)
     (workdir / "story.json").write_text(json.dumps(story, indent=2))
     print(f"Story: {story['post_title']} ({len(story['story'].split())} words)")
 
-    voice_id = voices.ensure_narrator(config, ROOT / "voices.json")
+    voice_id = voices.ensure_narrator(config, ROOT / "voices.json", which_voice)
     spoken_title = voices.say_as(story["post_title"], config)
     narration_text = f"{spoken_title}\n\n{voices.say_as(story['story'], config)}"
     alignment = voices.speak(narration_text, voice_id, workdir / "narration.mp3")
