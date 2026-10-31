@@ -1,7 +1,10 @@
-# Daily "Reddit story time" Shorts: an ORIGINAL story written by Claude, read by our own AI narrator,
+# Daily "Reddit story time" Shorts: your own story (or an original one written by Claude), read by our own AI narrator,
 # over a random slice of your own gameplay recordings, with big word-by-word captions.
 
 story:
+  # Your own stories in stories/ are always used first, word for word.
+  # When none are left: true lets Claude write one, false skips the day with an error.
+  auto_write: false
   model: claude-opus-5-5
   min_words: 110
   max_words: 140          # ~50 seconds read aloud, plus the title
@@ -9,9 +12,9 @@ story:
 narrator:
   name: Story Narrator
   # Designed once in ElevenLabs from this description; the ID is saved in voices.json.
-  # To redesign it, change the description and delete the "narrator" line from voices.json.
+  # Change the description and a new voice is designed on the next run.
   # Or set voice_id to any voice in your ElevenLabs library to use that instead.
-  voice: A young adult male voice, American accent, casual and expressive storyteller, clear and fast-paced, slightly dramatic, great for viral story narration
+  voice: A young adult female voice, American accent, casual and expressive storyteller, clear and fast-paced, slightly dramatic, great for viral story narration
   voice_id: ""
 
 card:
@@ -21,7 +24,7 @@ gameplay:
   release_tag: gameplay    # the GitHub release you upload gameplay videos to (README step 2)
 
 video:
-  max_seconds: 59
+  max_seconds: 179        # Shorts can be up to 3 minutes; longer stories are read faster, then cut
   gameplay_volume: 0       # 0 mutes the game; try 0.1 to keep quiet game sound under the voice
 
 youtube:

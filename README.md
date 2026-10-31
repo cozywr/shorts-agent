@@ -2,12 +2,12 @@
 
 Every day this agent:
 
-1. **Writes a story** (Claude): an original, made-up story in the style of a viral Reddit post,
-   with a hook title and a twist. Never a copy of a real post.
+1. **Takes your next story** from the `stories/` folder, word for word (see "Adding your stories").
+   If `story.auto_write` is on in `config.yaml` and you've run out, Claude writes an original one instead.
 2. **Narrates it** with the channel's own AI narrator voice (ElevenLabs), with word-by-word timing.
 3. **Edits the Short** (ffmpeg): a random slice of *your own* gameplay recordings, cropped to
    1080x1920, a post card with the title at the start, then big captions that pop in word by word.
-   Under 60 seconds.
+   Up to 3 minutes.
 4. **Uploads it** to your channel through the YouTube Data API.
 
 It runs on a schedule in GitHub Actions, so nothing needs to stay on in your house.
@@ -20,8 +20,8 @@ It runs on a schedule in GitHub Actions, so nothing needs to stay on in your hou
 | `ANTHROPIC_API_KEY` | console.anthropic.com → API Keys |
 | `ELEVENLABS_API_KEY` | elevenlabs.io → Profile → API key (Starter plan is enough) |
 
-The narrator voice is designed automatically on the first run and saved in `voices.json`
-(see `narrator` in `config.yaml` to change it).
+The narrator voice is designed automatically from its description in `config.yaml` (`narrator`)
+and saved in `voices.json`. Change the description and a new voice is made on the next run.
 
 ### 2. Gameplay clips
 Use gameplay **you recorded yourself** (other people's footage can get your videos claimed or taken down).
@@ -51,10 +51,18 @@ In the GitHub repo go to **Settings → Secrets and variables → Actions** and 
 `YOUTUBE_CLIENT_ID`, `YOUTUBE_CLIENT_SECRET`, `YOUTUBE_REFRESH_TOKEN`.
 Never paste them in a chat or commit them.
 
+## Adding your stories
+1. Open the repo on GitHub and click into the **stories** folder.
+2. Click **Add file → Create new file**.
+3. Name it ending in `.txt`, e.g. `01-roommate-cake.txt` (stories are used in name order).
+4. Type the **title on the first line**, then the story on the lines below it.
+5. Click **Commit changes**, then **Commit changes** again.
+
+Each story is posted once, then moves to `stories/used/`. A test (dry) run doesn't use it up.
+
 ## Running it
 - **Test without posting:** Actions tab → *Daily Short* → *Run workflow*. *Dry run* is ticked by default.
-  Type an idea in the *Story idea* box (e.g. `a roommate who labels every single grape`) or leave it
-  empty and Claude comes up with one. The finished video is attached to the run under *Artifacts*.
+  It uses your next story. The finished video is attached to the run under *Artifacts*.
 - **Daily:** it runs automatically at 16:00 UTC. Change the `cron` line in
   `.github/workflows/daily-short.yml` to pick another time.
 
