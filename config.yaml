@@ -14,8 +14,8 @@ narrator:
   # To use a voice picked from the "Voice samples" run, set voice_id and library_owner_id
   # from its line in voices.txt. Otherwise a voice is designed from the description below.
   voice: A young adult female voice, American accent, casual and expressive storyteller, clear and fast-paced, slightly dramatic, great for viral story narration
-  voice_id: ""
-  library_owner_id: ""
+  voice_id: 19STyYD15bswVz51nqLf          # Samara X (picked from Voice samples)
+  library_owner_id: 6643afd1d55a6987b18e340e00bb89ed60329c878a01823e0c10a50fb522bd76
   # How shorthand is read aloud. The card still shows what you wrote; the captions show what's said.
   say_as:
     AITA: Am I the asshole
