@@ -2,5 +2,9 @@
   "narrator": {
     "id": "19STyYD15bswVz51nqLf",
     "voice": "library:6643afd1d55a6987b18e340e00bb89ed60329c878a01823e0c10a50fb522bd76/19STyYD15bswVz51nqLf"
+  },
+  "creepy": {
+    "id": "mpHKakCHjcnpaDuRTKqK",
+    "voice": "library:963890fe7fad6c0449c74f991c6202f9625a9565f95d682c825da5785dd3210e/mpHKakCHjcnpaDuRTKqK"
   }
 }
