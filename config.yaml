@@ -1,54 +1,29 @@
-# Daily "Reddit story time" Shorts: your own story (or an original one written by Claude), read by our own AI narrator,
-# over a random slice of your own gameplay recordings, with big word-by-word captions.
+# Daily fun-fact Shorts for kids: Claude writes a true, kid-friendly fact as a little cartoon script,
+# our stickman host (red cap) acts it out with big pictures, a cheerful narrator reads it,
+# and big captions light up word by word.
 
-story:
-  # Your own stories in stories/ are always used first, word for word.
-  # When none are left: true lets Claude write one, false skips the day with an error.
-  auto_write: false
+facts:
   model: claude-opus-5-5
-  min_words: 110
-  max_words: 140          # ~50 seconds read aloud, plus the title
+  min_words: 80
+  max_words: 110          # about 40 seconds read aloud
 
 narrator:
-  name: Story Narrator
+  name: Fun Facts Narrator
   # To use a voice picked from the "Voice samples" run, set voice_id and library_owner_id
   # from its line in voices.txt. Otherwise a voice is designed from the description below.
-  voice: A young adult female voice, American accent, casual and expressive storyteller, clear and fast-paced, slightly dramatic, great for viral story narration
-  voice_id: 19STyYD15bswVz51nqLf          # Samara X (picked from Voice samples)
+  voice: A warm, cheerful, upbeat female voice, American accent, friendly like a fun teacher talking to young kids, clear and expressive
+  voice_id: 19STyYD15bswVz51nqLf          # Samara X for now; pick a kid-friendly voice with Voice samples
   library_owner_id: 6643afd1d55a6987b18e340e00bb89ed60329c878a01823e0c10a50fb522bd76
-  # How shorthand is read aloud. The card still shows what you wrote; the captions show what's said.
-  say_as:
-    AITA: Am I the asshole
-    AITAH: Am I the asshole
-    WIBTA: Would I be the asshole
-
-# Other voices a story can use: start the story file with a line like "voice: creepy".
-# Pick one by ear with the Voice samples workflow, then fill in voice_id and library_owner_id.
-extra_voices:
-  creepy:
-    name: Creepy Narrator
-    voice_id: mpHKakCHjcnpaDuRTKqK          # Jared Wayne (picked from Voice samples)
-    library_owner_id: 963890fe7fad6c0449c74f991c6202f9625a9565f95d682c825da5785dd3210e
-
-card:
-  show: false              # true shows a white post card with the title at the start
-  channel_name: Story Time   # shown on the post card at the start of each video
-
-gameplay:
-  release_tag: gameplay    # the GitHub release you upload gameplay videos to (README step 2)
-  # The parts of each recording that are actual gameplay (minutes:seconds), so menus,
-  # hero select and end-of-match screens never show. A clip not listed here skips its first
-  # and last minute.
-  good_parts:
-    2026-10-24.16-47-18.mp4: ["1:35-7:25", "7:40-9:20", "10:35-15:20", "19:50-23:35", "24:20-27:35"]
+  # How words are read aloud, if the narrator gets one wrong (written: spoken).
+  say_as: {}
 
 video:
-  speed: 1.15             # narration speed (1 = as recorded); captions stay in sync
-  max_seconds: 179        # Shorts can be up to 3 minutes; longer stories are read faster, then cut
-  gameplay_volume: 0       # 0 mutes the game; try 0.1 to keep quiet game sound under the voice
+  speed: 1.0              # narration speed (1 = as recorded); captions stay in sync
+  max_seconds: 60
 
 youtube:
   # "private" lets you review each Short in YouTube Studio before publishing.
-  # Switch to "public" once you trust the output (and your API project has passed YouTube's audit).
+  # Switch to "public" once you trust the output.
   privacy: private
-  category_id: "24"       # Entertainment
+  category_id: "27"       # Education
+  made_for_kids: true     # required for videos aimed at kids: turns off comments and personalised ads

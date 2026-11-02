@@ -24,12 +24,12 @@ def upload(video: Path, script: dict, config: dict) -> str:
     body = {
         "snippet": {
             "title": title[:100],
-            "description": f"{script['description']}\n\nParody. All characters are original.\n#Shorts",
+            "description": f"{script['description']}\n\n#Shorts #FunFacts #KidsLearning",
             "tags": script.get("tags", [])[:15],
             "categoryId": yt["category_id"],
         },
-        "status": {"privacyStatus": yt["privacy"], "selfDeclaredMadeForKids": False,
-                   "containsSyntheticMedia": True},
+        "status": {"privacyStatus": yt["privacy"], "selfDeclaredMadeForKids": yt.get("made_for_kids", True),
+                   "containsSyntheticMedia": False},
     }
     request = youtube.videos().insert(
         part="snippet,status", body=body,

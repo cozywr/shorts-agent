@@ -9,13 +9,13 @@ on:
         description: "Make the video but don't upload it"
         type: boolean
         default: true
-      idea:
-        description: "Story idea (optional), e.g. a roommate who labels every single grape"
+      topic:
+        description: "Topic (optional), e.g. why cats purr. Empty lets the agent pick."
         type: string
         default: ""
 
 permissions:
-  contents: write            # to commit history.json so stories never repeat
+  contents: write            # to commit history.json so facts never repeat
 
 jobs:
   post:
@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-dejavu-core
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-color-emoji
       - run: pip install -r requirements.txt
       - name: Make and upload today's Short
         env:
@@ -35,20 +35,21 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          IDEA: ${{ inputs.idea }}
-          GITHUB_TOKEN: ${{ github.token }}   # to download gameplay from the release
+          TOPIC: ${{ inputs.topic }}
         run: python -m agent.main ${{ inputs.dry_run && '--dry-run' || '' }}
       - name: Keep the video so you can watch it
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: short-${{ github.run_number }}
-          path: output/
+          path: |
+            output/
+            !output/emoji/
           retention-days: 14
-      - name: Remember the voice and which stories were used
+      - name: Remember the voice and which facts were used
         if: always()
         run: |
           git config user.name "shorts-agent"
           git config user.email "shorts-agent@users.noreply.github.com"
-          git add -A history.json voices.json stories
+          git add -A history.json voices.json
           git diff --cached --quiet || (git commit -m "Log today's Short [skip ci]" && git push)
