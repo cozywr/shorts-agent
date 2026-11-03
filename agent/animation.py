@@ -20,7 +20,7 @@ FONT = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "Fredoka-Bo
 EMOJI_FONT = "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
 EMOJI_PNG = "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/png/512/emoji_u{code}.png"
 
-BACKGROUNDS = ["sky", "underwater", "space", "forest", "desert", "snow", "night", "lab"]
+BACKGROUNDS = ["sky", "underwater", "space", "forest", "desert", "snow", "night", "lab", "city", "bedroom"]
 POSES = ["explain", "wave", "point", "think", "surprised", "cheer", "jump", "shrug", "walk", "dance",
          "faint", "spin", "run", "laugh", "scared"]
 SHAKY = {"surprised", "scared", "faint"}   # poses that shake the camera for a moment
@@ -166,6 +166,38 @@ def background(kind: str) -> Image.Image:
         d.rectangle((0, GROUND, W, H), fill=(210, 170, 120))
         for x in range(0, W, 120):
             d.line((x, GROUND, x - 80, H), fill=(190, 150, 100), width=6)
+    elif kind == "city":
+        img = _gradient((40, 30, 90), (240, 120, 110))
+        d = ImageDraw.Draw(img)
+        x = -20
+        while x < W:
+            w, h = rnd.randint(110, 190), rnd.randint(380, 900)
+            shade = rnd.randint(30, 60)
+            d.rectangle((x, GROUND - h, x + w, GROUND), fill=(shade, shade - 10, shade + 30))
+            for wy in range(GROUND - h + 30, GROUND - 40, 60):
+                for wx in range(x + 18, x + w - 30, 40):
+                    if rnd.random() < 0.45:
+                        d.rectangle((wx, wy, wx + 20, wy + 30), fill=(255, 220, 120))
+            x += w + rnd.randint(4, 20)
+        d.rectangle((0, GROUND, W, H), fill=(70, 70, 85))
+        d.rectangle((0, GROUND, W, GROUND + 24), fill=(150, 150, 165))
+        for xx in range(40, W, 200):
+            d.rectangle((xx, GROUND + 230, xx + 100, GROUND + 250), fill=(230, 220, 120))
+    elif kind == "bedroom":
+        img = _gradient((120, 130, 200), (170, 175, 230))
+        d = ImageDraw.Draw(img)
+        d.rounded_rectangle((640, 560, 980, 900), 16, fill=(30, 40, 90), outline=(250, 245, 235), width=18)
+        d.line((810, 560, 810, 900), fill=(250, 245, 235), width=12)
+        d.line((640, 730, 980, 730), fill=(250, 245, 235), width=12)
+        d.ellipse((870, 600, 930, 660), fill=(255, 245, 200))
+        d.rectangle((0, GROUND, W, H), fill=(150, 105, 80))
+        d.rectangle((0, GROUND, W, GROUND + 16), fill=(120, 80, 60))
+        d.rounded_rectangle((600, GROUND - 150, 1120, GROUND - 40), 20, fill=(240, 240, 250))
+        d.rounded_rectangle((600, GROUND - 190, 1120, GROUND - 120), 30, fill=(90, 140, 230))
+        d.rounded_rectangle((640, GROUND - 230, 820, GROUND - 160), 30, fill=(255, 255, 255))
+        d.rectangle((600, GROUND - 40, 630, GROUND), fill=(110, 70, 50))
+        d.rectangle((60, GROUND - 230, 200, GROUND), fill=(170, 120, 90))
+        d.ellipse((90, GROUND - 330, 170, GROUND - 230), fill=(255, 230, 150))
     else:  # sky
         img = _gradient((110, 190, 255), (210, 238, 255))
         d = ImageDraw.Draw(img)
@@ -196,7 +228,7 @@ def _animate_background(frame: Image.Image, kind: str, t: float) -> None:
             y = GROUND - ((rnd.randint(0, 1500) + t * sp) % 1500)
             x = x0 + 14 * math.sin(t * 2 + i)
             d.ellipse((x - r, y - r, x + r, y + r), outline=(220, 245, 255), width=4)
-    elif kind in ("space", "night"):
+    elif kind in ("space", "night", "city"):
         for i in range(70):
             x, y = rnd.randint(0, W), rnd.randint(0, GROUND - 100)
             r = 2 + 3 * (0.5 + 0.5 * math.sin(t * rnd.uniform(1.5, 4) + i))
@@ -471,15 +503,15 @@ BOX_W, BOX_H = 760, 1000            # area the stickman is drawn in (1x)
 FOOT_Y = BOX_H - 40                 # feet sit here inside the box
 
 
-def _limb(d, start, upper, lower, l1, l2, width):
+def _limb(d, start, upper, lower, l1, l2, width, color=INK):
     a = upper
     x1, y1 = start[0] + _vec(a, l1)[0], start[1] + _vec(a, l1)[1]
     b = upper + lower
     x2, y2 = x1 + _vec(b, l2)[0], y1 + _vec(b, l2)[1]
-    d.line((start, (x1, y1), (x2, y2)), fill=INK, width=width, joint="curve")
+    d.line((start, (x1, y1), (x2, y2)), fill=color, width=width, joint="curve")
     for x, y in (start, (x1, y1), (x2, y2)):
         r = width / 2
-        d.ellipse((x - r, y - r, x + r, y + r), fill=INK)
+        d.ellipse((x - r, y - r, x + r, y + r), fill=color)
     return x2, y2
 
 
@@ -505,12 +537,13 @@ def draw_stickman(p: dict, mouth_open: float, blink: bool) -> Image.Image:
     neck = (hip[0] + _vec(180 - lean, SPINE)[0] * k, hip[1] + _vec(180 - lean, SPINE)[1] * k)
     shoulder = (hip[0] + _vec(180 - lean, SPINE - 20)[0] * k, hip[1] + _vec(180 - lean, SPINE - 20)[1] * k)
 
-    for leg in ("ll", "rl"):
-        _limb(d, hip, p[leg][0], p[leg][1], THIGH * k, SHIN * k, lw)
-    d.line((hip, neck), fill=INK, width=lw)
-    # left arm behind, right arm in front of the body
-    _limb(d, shoulder, p["la"][0], p["la"][1], UPPER_ARM * k, LOWER_ARM * k, lw)
-    _limb(d, shoulder, p["ra"][0], p["ra"][1], UPPER_ARM * k, LOWER_ARM * k, lw)
+    # a thin white outline first, so he stands out on dark backgrounds too
+    for color, width in (((255, 255, 255), lw + 10 * k), (INK, lw)):
+        for leg in ("ll", "rl"):
+            _limb(d, hip, p[leg][0], p[leg][1], THIGH * k, SHIN * k, width, color)
+        d.line((hip, neck), fill=color, width=width)
+        _limb(d, shoulder, p["la"][0], p["la"][1], UPPER_ARM * k, LOWER_ARM * k, width, color)
+        _limb(d, shoulder, p["ra"][0], p["ra"][1], UPPER_ARM * k, LOWER_ARM * k, width, color)
 
     # head
     tilt = p["tilt"]

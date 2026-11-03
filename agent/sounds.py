@@ -8,7 +8,7 @@ import requests
 API = "https://api.elevenlabs.io/v1"
 ROOT = Path(__file__).resolve().parent.parent
 SFX_DIR = ROOT / "assets" / "sfx"
-MUSIC_FILE = ROOT / "assets" / "music" / "happy-loop.mp3"
+MUSIC_DIR = ROOT / "assets" / "music"
 
 SFX = {
     "boing": ("Cartoon spring boing sound effect, bouncy and funny", 1.0),
@@ -25,11 +25,22 @@ SFX = {
     "kids_wow": ("Group of children saying wooow, amazed and delighted", 1.5),
     "kids_laugh": ("Group of children giggling and laughing happily", 2.0),
     "zip": ("Cartoon character zipping away fast, zip sound", 0.8),
+    "boom": ("Deep cinematic bass boom impact, dramatic, short", 1.2),
+    "sting": ("Short suspense string sting, dramatic reveal", 1.5),
+    "heartbeat": ("Tense heartbeat thumping, two beats", 1.4),
+    "clock": ("Fast clock ticking, tense countdown", 1.5),
+    "alarm": ("Short electronic warning alarm beeping", 1.2),
+    "crowd_gasp": ("Small crowd gasping in shock, oooh", 1.2),
+    "crickets": ("Awkward silence with crickets chirping, comedic", 1.8),
 }
 NAMES = list(SFX) + ["none"]
 
-MUSIC_PROMPT = ("Bouncy, playful, upbeat instrumental music for a kids cartoon: ukulele, xylophone, "
-                "hand claps and whistling, silly and happy, steady tempo, no vocals, loops smoothly")
+MUSIC = {
+    "kids": ("happy-loop.mp3", "Bouncy, playful, upbeat instrumental music for a kids cartoon: ukulele, xylophone, "
+                               "hand claps and whistling, silly and happy, steady tempo, no vocals, loops smoothly"),
+    "young_adults": ("what-if-loop.mp3", "Curious, slightly tense lo-fi hip hop beat for a science explainer: soft "
+                                         "drums, deep bass, mysterious synth plucks, steady tempo, no vocals, loops smoothly"),
+}
 
 
 def _headers() -> dict:
@@ -67,23 +78,25 @@ def effect(name: str) -> Path | None:
     return out
 
 
-def music() -> Path | None:
-    """The background music loop, made the first time it's needed."""
-    if MUSIC_FILE.exists():
-        return MUSIC_FILE
-    MUSIC_FILE.parent.mkdir(parents=True, exist_ok=True)
+def music(audience: str = "kids") -> Path | None:
+    """The background music loop for this audience, made the first time it's needed."""
+    name, prompt = MUSIC.get(audience, MUSIC["kids"])
+    music_file = MUSIC_DIR / name
+    if music_file.exists():
+        return music_file
+    MUSIC_DIR.mkdir(parents=True, exist_ok=True)
     try:
         resp = requests.post(f"{API}/music", headers=_headers(), timeout=300,
-                             json={"prompt": MUSIC_PROMPT, "music_length_ms": 60000, "force_instrumental": True})
+                             json={"prompt": prompt, "music_length_ms": 60000, "force_instrumental": True})
         resp.raise_for_status()
         data = resp.content
         print("Made the background music")
     except Exception as err:
         print(f"Music API didn't work ({err}); making a sound-effect loop instead")
         try:
-            data = _generate(MUSIC_PROMPT, 30, loop=True)
+            data = _generate(prompt, 30, loop=True)
         except Exception as err2:
             print(f"Couldn't make background music: {err2}")
             return None
-    MUSIC_FILE.write_bytes(data)
-    return MUSIC_FILE
+    music_file.write_bytes(data)
+    return music_file

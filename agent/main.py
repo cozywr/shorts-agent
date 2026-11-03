@@ -63,7 +63,7 @@ def run(dry_run: bool, topic: str | None = None) -> None:
         text, starts = narration_text(script["scenes"])
 
     effects = [sounds.effect(sc.get("sfx", "none")) for sc in script["scenes"]]
-    music = sounds.music() if config["video"].get("music_volume", 0) > 0 else None
+    music = sounds.music(config["facts"].get("audience", "kids")) if config["video"].get("music_volume", 0) > 0 else None
     final = video.assemble(script["scenes"], starts, workdir / "narration.mp3", alignment,
                            workdir, workdir / "short.mp4", config["video"], effects, music)
     print(f"Video: {final}")

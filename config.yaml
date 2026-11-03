@@ -1,20 +1,24 @@
-# Daily silly fun-fact Shorts for kids: Claude writes a true, weird fact as a goofy cartoon script,
-# our stickman host (red cap) acts it out (fainting, running, laughing) with big pictures, speech bubbles,
-# cartoon sound effects and happy music, an excited cartoon narrator reads it,
-# and big captions light up word by word.
+# Daily stickman Shorts. Claude writes the script, our stickman host (red cap) acts it out with big
+# pictures, speech bubbles, sound effects and music, the narrator reads it, and captions light up word by word.
+#
+# Two styles (facts.audience). To switch, change the lines marked "kids:" / "young_adults:" below.
+#   young_adults  "What would happen if...?" scenarios for ages 16-30: real science, dry humor, a twist
+#   kids          silly fun facts for ages 5-10 (then use a cartoon voice and made_for_kids: true)
 
 facts:
+  audience: young_adults
   model: claude-opus-5-5
-  min_words: 85
-  max_words: 115          # about 40 seconds read aloud
+  min_words: 110          # kids: 85
+  max_words: 140          # kids: 115  (140 words is about 55 seconds)
 
 narrator:
-  name: Fun Facts Narrator
+  name: What If Narrator
   # To use a voice picked from the "Voice samples" run, set voice_id and library_owner_id
   # from its line in voices.txt. Otherwise a voice is designed from the description below.
-  voice: A goofy, high-energy cartoon narrator, playful and over-the-top excited, perfect for kids' comedy
-  voice_id: eh3mW70o6niXfNTuBPbY          # Georgee (energetic goofy cartoon narrator), from Voice samples run 4
-  library_owner_id: 3cffc638a198a148a8fcc1615b892170acba9b17feba79bf45ac54fb05b44f28
+  voice: A deadpan, dry, slightly sarcastic modern documentary narrator, calm and clear
+  voice_id: 7PbNGDB5sJCFnOZuMPNL          # Mark Dou (modern narrator), from Voice samples run 5
+  library_owner_id: 7f377047e0302c5a547399f6d7836f76ab9454f52fa2ba2d444c3bcd2c5e046f
+  # kids: Georgee, voice_id eh3mW70o6niXfNTuBPbY, library_owner_id 3cffc638a198a148a8fcc1615b892170acba9b17feba79bf45ac54fb05b44f28
   model: eleven_v3        # the most expressive voice model; falls back to eleven_multilingual_v2
   # How words are read aloud, if the narrator gets one wrong (written: spoken).
   say_as: {}
@@ -23,11 +27,12 @@ video:
   speed: 1.0              # narration speed (1 = as recorded); captions stay in sync
   max_seconds: 60
   music_volume: 0.12      # background music under the voice (0 turns it off)
-  effects_volume: 0.6     # cartoon sound effects
+  effects_volume: 0.6     # sound effects
 
 youtube:
   # "private" lets you review each Short in YouTube Studio before publishing.
   # Switch to "public" once you trust the output.
   privacy: private
-  category_id: "27"       # Education
-  made_for_kids: true     # required for videos aimed at kids: turns off comments and personalised ads
+  category_id: "24"       # Entertainment (kids: "27", Education)
+  made_for_kids: false    # kids: true (required for kids' videos; turns off comments and personalised ads)
+  hashtags: "#Shorts #WhatIf #Science #Animation"   # kids: "#Shorts #FunFacts #KidsLearning"

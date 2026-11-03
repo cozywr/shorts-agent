@@ -24,7 +24,7 @@ def upload(video: Path, script: dict, config: dict) -> str:
     body = {
         "snippet": {
             "title": title[:100],
-            "description": f"{script['description']}\n\n#Shorts #FunFacts #KidsLearning",
+            "description": f"{script['description']}\n\n{yt.get('hashtags', '#Shorts')}",
             "tags": script.get("tags", [])[:15],
             "categoryId": yt["category_id"],
         },

@@ -1,4 +1,8 @@
-"""Asks Claude to write today's fun fact as a short stickman cartoon script."""
+"""Asks Claude to write today's video as a short stickman cartoon script, in one of two styles
+(facts.audience in config.yaml):
+  kids         silly fun facts for ages 5-10
+  young_adults "What would happen if...?" scenarios for ages 16-30, with real science and dry humor
+"""
 import json
 
 import anthropic
@@ -6,7 +10,7 @@ import anthropic
 from agent.animation import BACKGROUNDS, POSES
 from agent.sounds import NAMES as SOUNDS
 
-PROMPT = """You write scripts for a super fun YouTube Shorts cartoon channel for kids aged 5 to 10.
+KIDS_PROMPT = """You write scripts for a super fun YouTube Shorts cartoon channel for kids aged 5 to 10.
 Each video is a goofy cartoon: a silly stickman host in a red cap reacts to a jaw-dropping fun fact,
 with big pictures (emoji), cartoon sound effects, comic speech bubbles and a very excited
 cartoon narrator. Kids should LAUGH first and learn something by accident.
@@ -54,14 +58,67 @@ Format:
 
 Reply with the script as JSON."""
 
-TOPIC_ANY = "Pick a fresh, wacky topic: weird animals, the silly human body, space, dinosaurs, food, nature or how things work."
+WHAT_IF_PROMPT = """You write scripts for a viral YouTube Shorts channel for people aged 16 to 30.
+Each video is a stick-figure animation of a "What would happen if...?" scenario: our stickman
+(he's "you") lives through it, stage by stage, while a deadpan narrator explains what REALLY happens.
+Think: "What if you stopped sleeping?", "How long could you survive on the Moon?",
+"What happens to your body if you drink only coffee for a week?", "What if you fell into
+the Mariana Trench?", "What if you were the last person on Earth?".
+
+{topic}
+What makes it work:
+- The title question IS the hook: the first line says it in under 2 seconds. No intro, no "hey guys".
+- Walk through it in escalating stages with time or level markers (Hour 1, Day 3, Week 2, Minus 40
+  degrees...). Each stage gets worse, weirder or more surprising than the last.
+- The facts are REAL science, medicine, physics, history or psychology, specific and checkable
+  (NASA, medical sources, encyclopedias). No myths, no made-up numbers. If you're not sure, leave it out.
+- Dry, sarcastic, relatable humor for teens and twenty-somethings: deadpan one-liners, ironic
+  understatement, jokes about school, work, rent, sleep schedules, phones, the gym, group chats.
+  The stickman suffers comically (faints, panics, gives up). Funny, never cruel.
+- End on a twist or punchline, then one short question that makes people comment
+  ("Would you last past day two? Be honest.").
+- Advertiser-friendly: no gore or graphic injuries (keep danger cartoonish and implied),
+  no self-harm or suicide, no drugs, alcohol or vaping, no sexual content, no slurs or insults
+  about groups, no real people or brands, nothing people could copy to hurt themselves.
+  Don't present dangerous challenges as a good idea.
+
+Format:
+- {min_words}-{max_words} spoken words in total (about 45-55 seconds), split into 6 to 8 scenes.
+- narration: exactly what the narrator says. Numbers in words where it reads better, no emoji.
+  You may add up to three voice directions per video, each ONE word in square brackets:
+  [sarcastic], [sighs], [laughs], [whispers], [gasps], [deadpan].
+- headline: the stage marker or a 1-4 word punch at the top of the scene ("DAY 3", "HOUR 17",
+  "BRAIN: OFFLINE"). Use stage markers for the stages.
+- shout: what the stickman says in a comic speech bubble, 1-3 words ("NOPE.", "WHY?!", "I'M FINE"),
+  or empty. Use it in about half the scenes.
+- emojis: 1 to 4 standard emoji showing what's happening (e.g. ["☕", "🧠"]). Only common single
+  emoji every phone has: no flags, skin tones or combined emoji.
+- background: one of {backgrounds}. Pick what fits; changing it between scenes is fine.
+- pose: one of {poses}.
+  explain = talking with his hands, point = points at the pictures, think = hand on chin,
+  surprised = jumps back, cheer/jump/dance = excited, shrug = "whatever", wave = waves,
+  faint = collapses flat on his back, spin = flips in the air, run = runs back and forth in a panic,
+  laugh = can't stop laughing, scared = shaking with his arms up.
+  Never the same pose twice in a row; save faint/run/scared for the big moments.
+- sfx: the sound at the start of the scene, one of {sounds}. Dramatic ones (boom, sting, heartbeat,
+  clock, alarm, crowd_gasp, crickets, record_scratch) fit this channel best. Use "none" sometimes.
+- Don't repeat any of these earlier topics: {used}
+
+Reply with the script as JSON."""
+
+PROMPTS = {"kids": KIDS_PROMPT, "young_adults": WHAT_IF_PROMPT}
+TOPIC_ANY = {
+    "kids": "Pick a fresh, wacky topic: weird animals, the silly human body, space, dinosaurs, food, nature or how things work.",
+    "young_adults": "Pick a fresh scenario: your body pushed to the limit, space, the ocean, extreme weather, "
+                    "history, technology, psychology, or a weird \"what if the world changed\" idea.",
+}
 TOPIC_GIVEN = "Today's topic: {topic}"
 
 SCHEMA = {
     "type": "object",
     "properties": {
         "topic": {"type": "string", "description": "A few words, e.g. 'octopus hearts'"},
-        "summary": {"type": "string", "description": "One sentence stating the fact, to avoid repeats"},
+        "summary": {"type": "string", "description": "One sentence stating the topic and main fact, to avoid repeats"},
         "scenes": {
             "type": "array",
             "items": {
@@ -79,8 +136,8 @@ SCHEMA = {
                 "additionalProperties": False,
             },
         },
-        "title": {"type": "string", "description": "Catchy, silly YouTube title under 70 characters that makes kids click, may use one emoji, ends with #Shorts"},
-        "description": {"type": "string", "description": "1-2 friendly sentences for parents and kids"},
+        "title": {"type": "string", "description": "Catchy YouTube title under 70 characters that makes the audience click, may use one emoji, ends with #Shorts"},
+        "description": {"type": "string", "description": "1-2 sentences for the YouTube description"},
         "tags": {"type": "array", "items": {"type": "string"}, "description": "5-10 tags"},
     },
     "required": ["topic", "summary", "scenes", "title", "description", "tags"],
@@ -90,8 +147,9 @@ SCHEMA = {
 
 def write_fact(config: dict, used: list[str], topic: str | None = None) -> dict:
     s = config["facts"]
-    prompt = PROMPT.format(
-        topic=TOPIC_GIVEN.format(topic=topic) if topic else TOPIC_ANY,
+    audience = s.get("audience", "kids")
+    prompt = PROMPTS[audience].format(
+        topic=TOPIC_GIVEN.format(topic=topic) if topic else TOPIC_ANY[audience],
         min_words=s["min_words"],
         max_words=s["max_words"],
         backgrounds=", ".join(BACKGROUNDS),
