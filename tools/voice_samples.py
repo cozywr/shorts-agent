@@ -48,7 +48,8 @@ def _premade() -> list[dict]:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     if SEARCH:
-        found = _library(12, search=SEARCH) + _library(8, use_case="narrative_story", search=SEARCH)
+        found = (_library(10, use_case="characters_animation", search=SEARCH) + _library(10, search=SEARCH)
+                 + _library(6, use_case="characters_animation"))
     else:
         found = _library(8, "narrative_story") + _library(6, "social_media") + _premade()
     seen, picks = set(), []
