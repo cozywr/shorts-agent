@@ -16,6 +16,7 @@ HEADERS = {"xi-api-key": os.environ["ELEVENLABS_API_KEY"]}
 OUT = Path("output/voice-samples")
 SEARCH = os.environ.get("SEARCH", "").strip()
 GENDER = os.environ.get("GENDER", "female").strip().lower()
+KIND = os.environ.get("KIND", "character").strip().lower()   # character or narrator
 
 
 def _library(count: int, use_case: str | None = None, search: str | None = None) -> list[dict]:
@@ -48,8 +49,9 @@ def _premade() -> list[dict]:
 def main() -> None:
     OUT.mkdir(parents=True, exist_ok=True)
     if SEARCH:
-        found = (_library(10, use_case="characters_animation", search=SEARCH) + _library(10, search=SEARCH)
-                 + _library(6, use_case="characters_animation"))
+        use_case = "narrative_story" if KIND == "narrator" else "characters_animation"
+        found = (_library(10, use_case=use_case, search=SEARCH) + _library(10, search=SEARCH)
+                 + _library(6, use_case=use_case))
     else:
         found = _library(8, "narrative_story") + _library(6, "social_media") + _premade()
     seen, picks = set(), []

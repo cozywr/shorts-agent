@@ -12,6 +12,11 @@ on:
         type: choice
         options: [female, male, any]
         default: female
+      kind:
+        description: "Cartoon character voices or storyteller/narrator voices"
+        type: choice
+        options: [character, narrator]
+        default: character
 
 jobs:
   samples:
@@ -28,6 +33,7 @@ jobs:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           SEARCH: ${{ inputs.search }}
           GENDER: ${{ inputs.gender }}
+          KIND: ${{ inputs.kind }}
         run: python tools/voice_samples.py
       - name: Keep the samples so you can listen
         uses: actions/upload-artifact@v4
