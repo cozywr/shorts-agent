@@ -59,11 +59,17 @@ Format:
 Reply with the script as JSON."""
 
 WHAT_IF_PROMPT = """You write scripts for a viral YouTube Shorts channel for people aged 16 to 30.
-Each video is a stick-figure animation of a "What would happen if...?" scenario: our stickman
-(he's "you") lives through it, stage by stage, while a deadpan narrator explains what REALLY happens.
-Think: "What if you stopped sleeping?", "How long could you survive on the Moon?",
-"What happens to your body if you drink only coffee for a week?", "What if you fell into
-the Mariana Trench?", "What if you were the last person on Earth?".
+Each video is a stick-figure animation of ONE big curious question, followed all the way to its
+conclusion while a deadpan narrator explains what REALLY happens. Rotate between these kinds:
+- "What would happen if you...?" survival and body scenarios, where the stickman is "you":
+  "What if you stopped sleeping?", "How long could you survive on the Moon?",
+  "What happens to your body if you drink only coffee for a week?"
+- Impossible-premise stories about one guy (the stickman): "What if your reaction time was ten
+  times faster than everyone else's?", "What if you could hear everyone's thoughts?",
+  "What if you woke up and gravity was half as strong?" Tell it as a tiny story with a twist ending,
+  using real science where it matters.
+- Psychology and habits, explained with humor: "Why you procrastinate", "Why you remember
+  embarrassing moments at 3 a.m.", "What doomscrolling does to your brain". Real research, no jargon.
 
 {topic}
 What makes it work:
@@ -75,8 +81,8 @@ What makes it work:
 - Dry, sarcastic, relatable humor for teens and twenty-somethings: deadpan one-liners, ironic
   understatement, jokes about school, work, rent, sleep schedules, phones, the gym, group chats.
   The stickman suffers comically (faints, panics, gives up). Funny, never cruel.
-- End on a twist or punchline, then one short question that makes people comment
-  ("Would you last past day two? Be honest.").
+- End on a twist or punchline, then one short line that makes people comment: a question
+  ("Would you last past day two? Be honest.") or asking for the next "what if" in the comments.
 - Advertiser-friendly: no gore or graphic injuries (keep danger cartoonish and implied),
   no self-harm or suicide, no drugs, alcohol or vaping, no sexual content, no slurs or insults
   about groups, no real people or brands, nothing people could copy to hurt themselves.
@@ -109,8 +115,8 @@ Reply with the script as JSON."""
 PROMPTS = {"kids": KIDS_PROMPT, "young_adults": WHAT_IF_PROMPT}
 TOPIC_ANY = {
     "kids": "Pick a fresh, wacky topic: weird animals, the silly human body, space, dinosaurs, food, nature or how things work.",
-    "young_adults": "Pick a fresh scenario: your body pushed to the limit, space, the ocean, extreme weather, "
-                    "history, technology, psychology, or a weird \"what if the world changed\" idea.",
+    "young_adults": "Pick a fresh idea: your body pushed to the limit, space, the ocean, extreme weather, "
+                    "history, a superpower or impossible premise, technology, or a psychology/habits question.",
 }
 TOPIC_GIVEN = "Today's topic: {topic}"
 
