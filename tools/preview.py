@@ -32,7 +32,7 @@ def main(script_file: str) -> None:
     subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "anullsrc=r=44100:cl=mono",
                     "-t", f"{seconds:.2f}", str(silence)], check=True)
     out = video.assemble(script["scenes"], starts, silence, alignment, workdir, workdir / "preview.mp4",
-                         {"max_seconds": 60, "speed": 1.0})
+                         {"max_seconds": 60, "speed": 1.0, "look": sys.argv[2] if len(sys.argv) > 2 else "cartoon"})
     print(out)
 
 

@@ -62,4 +62,8 @@ python -m agent.main --dry-run --topic "why cats purr"   # video lands in output
 python tools/preview.py examples/octopus.json            # silent preview, no API keys needed
 ```
 
-Fonts: Fredoka (SIL Open Font License, `assets/fonts/OFL.txt`).
+Fonts: Fredoka and Montserrat (SIL Open Font License, `assets/fonts/OFL*.txt`).
+
+Looks (`video.look`): `cinematic` draws silhouettes against glowing layered skies with slow camera push-ins,
+cross-fades, film grain and a vignette (`agent/cinematic.py`); `cartoon` is the bright kids look (`agent/animation.py`).
+Preview either without API keys: `python tools/preview.py examples/space.json cinematic`.

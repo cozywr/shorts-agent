@@ -5,7 +5,7 @@ import re
 import subprocess
 from pathlib import Path
 
-from agent import animation
+from agent import animation, cinematic
 
 FPS = 30
 MAX_SPEEDUP = 1.2    # a script that runs long is read up to 20% faster before anything gets cut
@@ -55,12 +55,24 @@ def _chunks(all_words: list[dict]) -> list[list[dict]]:
     return chunks
 
 
+CAPTION_STYLES = {
+    # chunky rounded yellow/white captions with a thick outline
+    "cartoon": "Style: Word,Fredoka,96,&H003CE1FF,&H00FFFFFF,&H00341E22,&H64000000,-1,0,0,0,100,100,1,0,1,9,5,5,60,60,0,1",
+    # clean white Montserrat with a soft shadow; the word being said turns warm yellow
+    "cinematic": "Style: Word,Montserrat ExtraBold,88,&H005AD4FF,&H00FFFFFF,&H00000000,&H96000000,0,0,0,0,100,100,2,0,1,0,3,5,80,80,0,1",
+}
+POPS = {
+    "cartoon": r"{\pos(540,1610)\fscx118\fscy118\t(0,90,\fscx100\fscy100)}",
+    "cinematic": r"{\pos(540,1660)\blur1\fad(60,0)\fscx104\fscy104\t(0,120,\fscx100\fscy100)}",
+}
+
+
 def _ass_time(t: float) -> str:
     cs = int(round(t * 100))
     return f"{cs // 360000}:{cs // 6000 % 60:02}:{cs // 100 % 60:02}.{cs % 100:02}"
 
 
-def captions(all_words: list[dict], speed: float, out: Path) -> Path:
+def captions(all_words: list[dict], speed: float, out: Path, look: str = "cartoon") -> Path:
     """Karaoke captions: each word turns yellow as it's said."""
     header = """[Script Info]
 ScriptType: v4.00+
@@ -70,7 +82,7 @@ WrapStyle: 0
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Word,Fredoka,96,&H003CE1FF,&H00FFFFFF,&H00341E22,&H64000000,-1,0,0,0,100,100,1,0,1,9,5,5,60,60,0,1
+{style}
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
@@ -92,9 +104,9 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             text += f"{{\\k{int(round(gap * 100))}}}" if gap > 0.005 else ""
             text += f"{{\\k{int(round(dur * 100))}}}{word} "
             t = w["end"] / speed
-        pop = r"{\pos(540,1610)\fscx118\fscy118\t(0,90,\fscx100\fscy100)}"
+        pop = POPS[look]
         lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Word,,0,0,0,,{pop}{text.strip()}\n")
-    out.write_text(header + "".join(lines))
+    out.write_text(header.replace("{style}", CAPTION_STYLES[look]) + "".join(lines))
     return out
 
 
@@ -111,7 +123,9 @@ def assemble(scenes: list[dict], starts: list[int], narration: Path, alignment: 
 
     char_starts = alignment["character_start_times_seconds"]
     scene_times = [0.0] + [char_starts[min(c, len(char_starts) - 1)] / speed - 0.1 for c in starts[1:]]
-    subs = captions(words(alignment), speed, workdir / "captions.ass")
+    look = settings.get("look", "cartoon")
+    renderer = cinematic if look == "cinematic" else animation
+    subs = captions(words(alignment), speed, workdir / "captions.ass", look)
     mouth = animation.mouth_track(alignment, speed)
 
     # Audio: the voice, plus each scene's sound effect at its start, plus the music underneath.
@@ -153,7 +167,7 @@ def assemble(scenes: list[dict], starts: list[int], narration: Path, alignment: 
         t = f / FPS
         while i + 1 < len(scenes) and t >= scene_times[i + 1]:
             i += 1
-        frame = animation.render_frame(scenes[i], scenes[i - 1] if i else None, t - scene_times[i], t,
+        frame = renderer.render_frame(scenes[i], scenes[i - 1] if i else None, t - scene_times[i], t,
                                        mouth(t), cache)
         proc.stdin.write(frame.tobytes())
         if f % (FPS * 10) == 0:
