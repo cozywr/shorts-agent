@@ -21,7 +21,9 @@ EMOJI_FONT = "/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf"
 EMOJI_PNG = "https://cdn.jsdelivr.net/gh/googlefonts/noto-emoji@v2.047/png/512/emoji_u{code}.png"
 
 BACKGROUNDS = ["sky", "underwater", "space", "forest", "desert", "snow", "night", "lab"]
-POSES = ["explain", "wave", "point", "think", "surprised", "cheer", "jump", "shrug", "walk", "dance"]
+POSES = ["explain", "wave", "point", "think", "surprised", "cheer", "jump", "shrug", "walk", "dance",
+         "faint", "spin", "run", "laugh", "scared"]
+SHAKY = {"surprised", "scared", "faint"}   # poses that shake the camera for a moment
 
 INK = (34, 34, 52)
 CAP = (235, 64, 52)
@@ -343,10 +345,14 @@ UPPER_ARM, LOWER_ARM, THIGH, SHIN = 115, 105, 135, 135
 SPINE, NECK, HEAD_R = 205, 26, 74
 
 
-def pose(name: str, t: float) -> dict:
+def pose(name: str, t: float, ts: float | None = None) -> dict:
+    """`t` is the time in the video (for looping moves), `ts` the time since the scene started
+    (for one-off moves like fainting)."""
     s = math.sin
+    ts = t if ts is None else ts
     p = {"la": (-25, -15), "ra": (25, 15), "ll": (-12, 0), "rl": (12, 0),
-         "lift": 4 * s(t * 3), "lean": 0.0, "tilt": 0.0, "face": "happy", "look": 1.0}
+         "lift": 4 * s(t * 3), "lean": 0.0, "tilt": 0.0, "face": "happy", "look": 1.0,
+         "rot": 0.0, "dx": 0.0}
     if name == "wave":
         p["ra"] = (150 + 18 * s(t * 9), 25 * s(t * 9 + 1))
         p["la"] = (-20, -10)
@@ -362,7 +368,7 @@ def pose(name: str, t: float) -> dict:
         p["face"] = "think"
         p["look"] = 0.3
     elif name == "surprised":
-        jolt = max(0.0, 1 - t * 3)
+        jolt = max(0.0, 1 - ts * 3)
         p["la"] = (-135 - 10 * s(t * 6), -20)
         p["ra"] = (135 + 10 * s(t * 6), 20)
         p["lift"] = 30 * jolt + 4 * s(t * 4)
@@ -400,6 +406,40 @@ def pose(name: str, t: float) -> dict:
         p["ll"], p["rl"] = (-20 + 10 * w, 10), (20 + 10 * w, -10)
         p["lean"] = 8 * w
         p["face"] = "joy"
+    elif name == "faint":
+        # wobbles, then falls flat on his back with dizzy eyes
+        k = _ease((ts - 0.35) / 0.35)
+        p["rot"] = -84 * k + (0 if k else 6 * s(ts * 25))   # falls over towards the pictures
+        p["la"], p["ra"] = (-60 - 60 * k, -20), (60 + 60 * k, 20)
+        p["ll"], p["rl"] = (-10, 0), (10 + 15 * k, 0)
+        p["face"] = "dizzy" if k > 0.5 else "wow"
+        p["lift"] = 0
+    elif name == "spin":
+        k = _ease(ts / 0.9)
+        p["rot"] = 360 * k
+        p["lift"] = 300 * s(math.pi * min(1.0, ts / 0.9))
+        p["la"], p["ra"] = (-110, -20), (110, 20)
+        p["face"] = "joy"
+    elif name == "run":
+        w = s(t * 16)
+        p["ll"], p["rl"] = (45 * w, 40 * max(0.0, -w)), (-45 * w, 40 * max(0.0, w))
+        p["la"], p["ra"] = (-55 * w, 70), (55 * w, 70)
+        p["lift"] = 14 * abs(math.cos(t * 16))
+        p["dx"] = 170 * s(ts * 2.4)
+        p["lean"] = 14 * math.cos(ts * 2.4)
+        p["face"] = "wow"
+    elif name == "laugh":
+        shake = s(t * 30)
+        p["la"], p["ra"] = (-30, 110), (30, -110)    # holding his belly
+        p["lift"] = 6 + 6 * shake
+        p["lean"] = -6 + 3 * shake
+        p["tilt"] = -10 + 4 * shake
+        p["face"] = "laugh"
+    elif name == "scared":
+        p["dx"] = 7 * s(t * 55)
+        p["la"], p["ra"] = (-150, 30), (150, -30)
+        p["ll"], p["rl"] = (-6, 8), (6, -8)
+        p["face"] = "wow"
     else:  # explain: friendly talking gestures
         g = s(t * 2.6)
         p["ra"] = (55 + 20 * g, 55 + 15 * s(t * 3.1))
@@ -413,8 +453,11 @@ def blend(a: dict, b: dict, k: float) -> dict:
     out = dict(b)
     for key in ("la", "ra", "ll", "rl"):
         out[key] = (_lerp(a[key][0], b[key][0], k), _lerp(a[key][1], b[key][1], k))
-    for key in ("lift", "lean", "tilt", "look"):
+    for key in ("lift", "lean", "tilt", "look", "dx"):
         out[key] = _lerp(a[key], b[key], k)
+    from_rot = a["rot"] % 360
+    from_rot = from_rot - 360 if from_rot > 180 else from_rot
+    out["rot"] = _lerp(from_rot, b["rot"], k)
     out["face"] = a["face"] if k < 0.5 else b["face"]
     return out
 
@@ -481,7 +524,12 @@ def draw_stickman(p: dict, mouth_open: float, blink: bool) -> Image.Image:
     ex, ey = 24 * k, -8 * k
     for side in (-1, 1):
         x = c + side * ex + look
-        if blink:
+        if p["face"] == "dizzy":
+            hd.line((x - 12 * k, c + ey - 12 * k, x + 12 * k, c + ey + 12 * k), fill=INK, width=int(6 * k))
+            hd.line((x - 12 * k, c + ey + 12 * k, x + 12 * k, c + ey - 12 * k), fill=INK, width=int(6 * k))
+        elif p["face"] == "laugh":
+            hd.arc((x - 13 * k, c + ey - 10 * k, x + 13 * k, c + ey + 14 * k), 200, 340, fill=INK, width=int(6 * k))
+        elif blink:
             hd.line((x - 11 * k, c + ey, x + 11 * k, c + ey), fill=INK, width=int(6 * k))
         elif p["face"] == "wow":
             hd.ellipse((x - 13 * k, c + ey - 17 * k, x + 13 * k, c + ey + 17 * k), fill=INK)
@@ -498,6 +546,10 @@ def draw_stickman(p: dict, mouth_open: float, blink: bool) -> Image.Image:
     if p["face"] == "wow" or mouth_open > 0.55:
         o = (0.6 + 0.6 * mouth_open) if p["face"] != "wow" else 1.2
         hd.ellipse((mx - 14 * k, my - 12 * k * o, mx + 14 * k, my + 14 * k * o), fill=(120, 30, 40), outline=INK, width=int(5 * k))
+    elif p["face"] == "laugh":
+        hd.chord((mx - 32 * k, my - 22 * k, mx + 32 * k, my + 34 * k), 0, 180, fill=(120, 30, 40), outline=INK, width=int(5 * k))
+    elif p["face"] == "dizzy":
+        hd.line([(mx - 22 * k + i * 11 * k, my + (6 if i % 2 else -2) * k) for i in range(5)], fill=INK, width=int(6 * k))
     elif mouth_open > 0.15 or p["face"] == "joy":
         hd.chord((mx - 26 * k, my - 18 * k, mx + 26 * k, my + 22 * k), 0, 180, fill=(120, 30, 40), outline=INK, width=int(5 * k))
     elif p["face"] == "think":
@@ -515,6 +567,60 @@ def draw_stickman(p: dict, mouth_open: float, blink: bool) -> Image.Image:
 
 # ---------------------------------------------------------------- whole frames
 
+@lru_cache(maxsize=64)
+def _bubble_sprite(text: str) -> Image.Image:
+    """A comic speech bubble with a short shout like "WHAAAT?!"."""
+    text = text.upper().strip()
+    size = 86
+    font = _font(size)
+    while font.getlength(text) > 440 and size > 44:
+        size -= 6
+        font = _font(size)
+    tw = font.getlength(text)
+    w, h = int(tw + 110), int(size * 1.5 + 60)
+    img = Image.new("RGBA", (w, h + 70), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.polygon([(w * 0.3, h - 30), (w * 0.52, h - 30), (w * 0.28, h + 60)], fill=INK)
+    d.ellipse((0, 0, w, h), fill=INK)
+    d.ellipse((9, 9, w - 9, h - 9), fill="white")
+    d.polygon([(w * 0.33, h - 36), (w * 0.48, h - 36), (w * 0.3, h + 44)], fill="white")
+    d.text((w / 2, h / 2), text, font=font, fill=(235, 64, 52), anchor="mm", stroke_width=3, stroke_fill=INK)
+    return img
+
+
+def _draw_bubble(frame: Image.Image, text: str, t: float, x: float) -> None:
+    if not text.strip() or t < 0.15 or t > 2.2:
+        return
+    s = _pop(t - 0.15) * (1 if t < 2.0 else max(0.0, 1 - (t - 2.0) / 0.2))
+    if s <= 0.02:
+        return
+    img = _bubble_sprite(text)
+    sprite = img.rotate(4 * math.sin(t * 5), resample=Image.BICUBIC, expand=True)
+    sprite = sprite.resize((max(1, int(sprite.width * s)), max(1, int(sprite.height * s))), Image.BILINEAR)
+    cx = max(sprite.width / 2 + 10, min(W - sprite.width / 2 - 10, x + 40))
+    frame.alpha_composite(sprite, (int(cx - sprite.width / 2), int(700 - sprite.height)))
+
+
+def _rotate_about_feet(man: Image.Image, angle: float, spin: bool, lift: float = 0) -> tuple[Image.Image, int, int]:
+    """Rotates the stickman around his feet (falling over) or his middle (spinning).
+    Returns the image and how far its corner moved."""
+    pad = 420
+    big = Image.new("RGBA", (man.width + pad * 2, man.height + pad), (0, 0, 0, 0))
+    big.paste(man, (pad, pad))
+    center = (pad + BOX_W / 2, pad + (FOOT_Y - 330 - lift if spin else FOOT_Y))
+    return big.rotate(angle, resample=Image.BICUBIC, center=center), -pad, -pad
+
+
+def _camera(frame: Image.Image, zoom: float, dx: float, dy: float) -> Image.Image:
+    """Punch-in zoom and shake around the middle of the picture."""
+    if zoom == 1 and not dx and not dy:
+        return frame
+    a = 1 / zoom
+    cx, cy = W / 2, H / 2
+    return frame.transform((W, H), Image.AFFINE, (a, 0, cx - a * cx + dx, 0, a, cy - a * cy + dy),
+                           resample=Image.BILINEAR)
+
+
 def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: float,
                  mouth_open: float, cache_dir: str) -> Image.Image:
     kind = scene["background"] if scene["background"] in BACKGROUNDS else "sky"
@@ -524,12 +630,27 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
     _draw_props(frame, scene.get("emojis") or [], t_scene, cache_dir)
     _draw_headline(frame, scene.get("headline", ""), t_scene)
 
-    p = pose(scene["pose"], t_total)
+    p = pose(scene["pose"], t_total, t_scene)
     if prev_scene is not None and t_scene < 0.3:
-        p = blend(pose(prev_scene["pose"], t_total), p, _ease(t_scene / 0.3))
+        p = blend(pose(prev_scene["pose"], t_total, t_scene + 99), p, _ease(t_scene / 0.3))
     blink = (t_total % 3.7) < 0.12
     man = draw_stickman(p, mouth_open, blink)
-    frame.alpha_composite(man, (int(HOST_X - BOX_W / 2), int(GROUND + 30 - FOOT_Y)))
+    x0, y0 = int(HOST_X - BOX_W / 2 + p["dx"]), int(GROUND + 30 - FOOT_Y)
+    if p["rot"] % 360:
+        man, ox, oy = _rotate_about_feet(man, p["rot"], scene["pose"] == "spin", p["lift"])
+        x0, y0 = x0 + ox, y0 + oy
+    frame.alpha_composite(man, (max(0, x0), max(0, y0)), (max(0, -x0), max(0, -y0)))
+    _draw_bubble(frame, scene.get("shout", ""), t_scene, HOST_X + p["dx"])
+
+    # camera: a quick punch-in on every new scene, a shake on big surprises
+    zoom = 1 + 0.07 * max(0.0, 1 - t_scene / 0.3) ** 2
+    shake = 0.0
+    if scene["pose"] in SHAKY:
+        when = 0.75 if scene["pose"] == "faint" else 0.0
+        shake = 16 * max(0.0, 1 - abs(t_scene - when - 0.2) / 0.25)
+    if shake:
+        zoom = max(zoom, 1.03)
+    frame = _camera(frame, zoom, shake * math.sin(t_total * 70), shake * math.cos(t_total * 53))
     return frame.convert("RGB")
 
 

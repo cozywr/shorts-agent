@@ -46,10 +46,10 @@ jobs:
             output/
             !output/emoji/
           retention-days: 14
-      - name: Remember the voice and which facts were used
+      - name: Remember the voice, sounds and which facts were used
         if: always()
         run: |
           git config user.name "shorts-agent"
           git config user.email "shorts-agent@users.noreply.github.com"
-          git add -A history.json voices.json
+          git add -A history.json voices.json assets/sfx assets/music
           git diff --cached --quiet || (git commit -m "Log today's Short [skip ci]" && git push)

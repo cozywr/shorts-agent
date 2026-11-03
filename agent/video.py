@@ -1,6 +1,7 @@
 """Turns the scenes and the narration into the finished Short: the stickman cartoon, the voice,
 and big word-by-word captions that light up as each word is said."""
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -37,7 +38,8 @@ def words(alignment: dict) -> list[dict]:
             out.append(current)
         current["text"] += ch
         current["end"] = ends[i]
-    return out
+    # voice directions like [excited] or [giggles] are acted out, not shown
+    return [w for w in out if not re.fullmatch(r"\[[^\]]*\]?[.,!?]*|[^\[]*\]", w["text"])]
 
 
 def _chunks(all_words: list[dict]) -> list[list[dict]]:
@@ -97,8 +99,10 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 
 
 def assemble(scenes: list[dict], starts: list[int], narration: Path, alignment: dict,
-             workdir: Path, out: Path, settings: dict) -> Path:
-    """`starts[i]` is the character in the narration where scene i begins."""
+             workdir: Path, out: Path, settings: dict, effects: list[Path | None] | None = None,
+             music: Path | None = None) -> Path:
+    """`starts[i]` is the character in the narration where scene i begins. `effects[i]` is the
+    sound effect played as scene i starts, and `music` loops quietly under everything."""
     max_seconds = settings["max_seconds"]
     base_speed = settings.get("speed", 1.0)
     spoken = duration(narration)
@@ -110,12 +114,35 @@ def assemble(scenes: list[dict], starts: list[int], narration: Path, alignment: 
     subs = captions(words(alignment), speed, workdir / "captions.ass")
     mouth = animation.mouth_track(alignment, speed)
 
-    voice = f"[1:a]atempo={speed:.4f},apad[a]" if speed != 1 else "[1:a]apad[a]"
+    # Audio: the voice, plus each scene's sound effect at its start, plus the music underneath.
+    inputs, mix = ["-i", str(narration)], []
+    voice = f"[1:a]atempo={speed:.4f},apad[voice]" if speed != 1 else "[1:a]apad[voice]"
+    parts = [voice]
+    n = 2
+    for i, sfx in enumerate(effects or []):
+        if sfx is None or i >= len(scenes):
+            continue
+        at = max(0.0, scene_times[i]) + (0.75 if scenes[i]["pose"] == "faint" else 0.05)
+        inputs += ["-i", str(sfx)]
+        ms = int(at * 1000)
+        parts.append(f"[{n}:a]volume={settings.get('effects_volume', 0.6)},adelay={ms}|{ms}[s{n}]")
+        mix.append(f"[s{n}]")
+        n += 1
+    if music:
+        inputs += ["-stream_loop", "-1", "-i", str(music)]
+        fade = max(0.0, length - 1.5)
+        parts.append(f"[{n}:a]volume={settings.get('music_volume', 0.12)},afade=t=out:st={fade:.2f}:d=1.5[m]")
+        mix.append("[m]")
+    if mix:
+        parts.append(f"[voice]{''.join(mix)}amix=inputs={len(mix) + 1}:duration=first:normalize=0[a]")
+    else:
+        parts[0] = parts[0].replace("[voice]", "[a]")
+    audio = ";".join(parts)
     video = (f"[0:v]subtitles=filename='{subs}':fontsdir='{FONT_DIR}',format=yuv420p[v]")
     proc = subprocess.Popen(
         ["ffmpeg", "-y", "-loglevel", "error",
          "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{animation.W}x{animation.H}", "-r", str(FPS), "-i", "-",
-         "-i", str(narration), "-filter_complex", f"{video};{voice}", "-map", "[v]", "-map", "[a]",
+         *inputs, "-filter_complex", f"{video};{audio}", "-map", "[v]", "-map", "[a]",
          "-t", f"{length:.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
          "-c:a", "aac", "-ar", "44100", "-ac", "2", "-movflags", "+faststart", str(out)],
         stdin=subprocess.PIPE)

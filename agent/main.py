@@ -1,4 +1,5 @@
-"""Daily run: write a fun fact for kids, voice it, animate the stickman host, upload it.
+"""Daily run: write a silly fun fact for kids, voice it, animate the stickman host with sound effects
+and music, upload it.
 
     python -m agent.main                          # full run, uploads to YouTube
     python -m agent.main --dry-run                # makes the video but does not upload
@@ -13,7 +14,7 @@ from pathlib import Path
 
 import yaml
 
-from agent import fact_writer, uploader, video, voices
+from agent import fact_writer, sounds, uploader, video, voices
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -52,10 +53,19 @@ def run(dry_run: bool, topic: str | None = None) -> None:
     print(f"Fact: {script['summary']} ({len(text.split())} words, {len(script['scenes'])} scenes)")
 
     voice_id = voices.ensure_narrator(config, ROOT / "voices.json")
-    alignment = voices.speak(voices.say_as(text, config), voice_id, workdir / "narration.mp3")
+    for sc in script["scenes"]:
+        sc["narration"] = voices.say_as(sc["narration"], config)
+    text, starts = narration_text(script["scenes"])
+    alignment = voices.speak(text, voice_id, workdir / "narration.mp3", config["narrator"])
+    if alignment["text"] != text:  # read without the [excited]-style directions
+        for sc in script["scenes"]:
+            sc["narration"] = voices.TAG.sub("", sc["narration"]).strip()
+        text, starts = narration_text(script["scenes"])
 
+    effects = [sounds.effect(sc.get("sfx", "none")) for sc in script["scenes"]]
+    music = sounds.music() if config["video"].get("music_volume", 0) > 0 else None
     final = video.assemble(script["scenes"], starts, workdir / "narration.mp3", alignment,
-                           workdir, workdir / "short.mp4", config["video"])
+                           workdir, workdir / "short.mp4", config["video"], effects, music)
     print(f"Video: {final}")
 
     if dry_run:

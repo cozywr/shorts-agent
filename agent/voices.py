@@ -74,15 +74,35 @@ def say_as(text: str, config: dict) -> str:
     return re.sub(r" ?[\U0001F000-\U0001FAFF\u2600-\u27BF\uFE0F\u200D]+", "", text)
 
 
-def speak(text: str, voice_id: str, out: Path) -> dict:
-    """Saves the speech to `out` and returns ElevenLabs' per-character timing for the text."""
-    resp = requests.post(
-        f"{API}/text-to-speech/{voice_id}/with-timestamps",
-        headers=_headers(),
-        json={"text": text, "model_id": "eleven_multilingual_v2"},
-        timeout=300,
-    )
-    resp.raise_for_status()
-    data = resp.json()
-    out.write_bytes(base64.b64decode(data["audio_base64"]))
-    return data["alignment"]
+TAG = re.compile(r"\s*\[[a-z ]{2,20}\]")
+
+
+def speak(text: str, voice_id: str, out: Path, settings: dict | None = None) -> dict:
+    """Saves the speech to `out` and returns ElevenLabs' per-character timing for the text that was read.
+    With the expressive eleven_v3 model, directions like [excited] or [giggles] are acted out;
+    other models (or if v3 fails) get the text without them."""
+    settings = settings or {}
+    model = settings.get("model", "eleven_multilingual_v2")
+    attempts = [(model, text)] if model == "eleven_v3" else []
+    attempts.append(("eleven_multilingual_v2" if model == "eleven_v3" else model, TAG.sub("", text).strip()))
+    last = None
+    for model_id, said in attempts:
+        if model_id == "eleven_v3":
+            voice_settings = {"stability": 0.0}        # v3's most expressive "creative" setting
+        else:
+            voice_settings = {"stability": settings.get("stability", 0.3),
+                              "similarity_boost": 0.8, "style": settings.get("style", 0.6)}
+        resp = requests.post(
+            f"{API}/text-to-speech/{voice_id}/with-timestamps",
+            headers=_headers(),
+            json={"text": said, "model_id": model_id, "voice_settings": voice_settings},
+            timeout=300,
+        )
+        if resp.ok:
+            data = resp.json()
+            out.write_bytes(base64.b64decode(data["audio_base64"]))
+            print(f"Voice: {model_id}")
+            return {**data["alignment"], "text": said}
+        last = resp
+        print(f"{model_id} didn't work ({resp.status_code}: {resp.text[:200]})")
+    last.raise_for_status()
