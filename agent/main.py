@@ -51,6 +51,10 @@ def run(dry_run: bool, topic: str | None = None) -> None:
     (workdir / "script.json").write_text(json.dumps(script, indent=2, ensure_ascii=False))
     text, starts = narration_text(script["scenes"])
     print(f"Fact: {script['summary']} ({len(text.split())} words, {len(script['scenes'])} scenes)")
+    print("Fact-check: " + ("; ".join(script.get("fact_check") or []) or "no changes needed"))
+    print("Script:")
+    for i, sc in enumerate(script["scenes"], 1):
+        print(f"  {i}. [{sc['headline']}] {sc['narration']}")
 
     voice_id = voices.ensure_narrator(config, ROOT / "voices.json")
     for sc in script["scenes"]:

@@ -163,19 +163,69 @@ def write_fact(config: dict, used: list[str], topic: str | None = None) -> dict:
         sounds=", ".join(SOUNDS),
         used="; ".join(used[-80:]) or "none yet",
     )
-    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
-    resp = client.messages.create(
-        model=s["model"],
-        max_tokens=16000,
-        output_config={"effort": "high", "format": {"type": "json_schema", "schema": SCHEMA}},
-        messages=[{"role": "user", "content": prompt}],
-    )
-    if resp.stop_reason != "end_turn":
-        raise RuntimeError(f"Script request stopped early: {resp.stop_reason}")
-    script = json.loads(next(b.text for b in resp.content if b.type == "text"))
+    script = _ask(s, prompt, SCHEMA)
     script["scenes"] = [sc for sc in script["scenes"] if sc["narration"].strip()][:8]
     for sc in script["scenes"]:
         sc["emojis"] = sc["emojis"][:4] or ["⭐"]
     if len(script["scenes"]) < 2:
         raise RuntimeError("The script came back with too few scenes.")
+    return fact_check(s, script)
+
+
+def _ask(s: dict, prompt: str, schema: dict) -> dict:
+    client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
+    resp = client.messages.create(
+        model=s["model"],
+        max_tokens=16000,
+        output_config={"effort": "high", "format": {"type": "json_schema", "schema": schema}},
+        messages=[{"role": "user", "content": prompt}],
+    )
+    if resp.stop_reason != "end_turn":
+        raise RuntimeError(f"Script request stopped early: {resp.stop_reason}")
+    return json.loads(next(b.text for b in resp.content if b.type == "text"))
+
+
+CHECK_PROMPT = """You are the fact-checker for a YouTube Shorts channel. Below is the narration of today's
+video, one line per scene. Check every factual claim (numbers, times, causes, effects, history, names).
+Jokes, exaggerated reactions and obvious sarcasm are fine and are not claims.
+
+- If a claim is wrong, outdated, a common myth, or stated with more certainty than the evidence allows,
+  rewrite just that part so it's accurate (use "about", "can", "up to" where the real answer varies).
+- If a claim can't be fixed simply, remove it and keep the sentence flowing.
+- Keep the style, the jokes, the voice directions in [brackets], and roughly the same length per scene.
+- Don't change scenes that are already accurate.
+
+Topic: {summary}
+
+{lines}
+
+Reply as JSON: the narration for every scene in the same order (same number of scenes: {n}),
+and a short note for each change you made (empty list if nothing needed fixing)."""
+
+CHECK_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "narrations": {"type": "array", "items": {"type": "string"}},
+        "changes": {"type": "array", "items": {"type": "string"}},
+    },
+    "required": ["narrations", "changes"],
+    "additionalProperties": False,
+}
+
+
+def fact_check(s: dict, script: dict) -> dict:
+    """A second, separate pass that fixes or removes shaky claims before anything is voiced."""
+    scenes = script["scenes"]
+    lines = "\n".join(f"Scene {i + 1}: {sc['narration']}" for i, sc in enumerate(scenes))
+    try:
+        result = _ask(s, CHECK_PROMPT.format(summary=script["summary"], lines=lines, n=len(scenes)), CHECK_SCHEMA)
+    except Exception as err:  # the check failing shouldn't stop the day's video
+        print(f"Fact-check didn't run: {err}")
+        script["fact_check"] = ["not run"]
+        return script
+    if len(result["narrations"]) == len(scenes):
+        for sc, text in zip(scenes, result["narrations"]):
+            if text.strip():
+                sc["narration"] = text.strip()
+    script["fact_check"] = result["changes"]
     return script
