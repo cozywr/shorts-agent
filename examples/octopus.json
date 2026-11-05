@@ -1,0 +1,15 @@
+{
+  "topic": "octopus hearts",
+  "summary": "An octopus has three hearts and blue blood.",
+  "scenes": [
+    {"narration": "Guess what? An octopus has more than one heart!", "headline": "Guess what?", "emojis": ["🐙"], "background": "underwater", "pose": "think"},
+    {"narration": "It has three hearts! Whoa!", "headline": "Three hearts!", "emojis": ["❤️", "❤️", "❤️"], "background": "underwater", "pose": "surprised"},
+    {"narration": "Two hearts pump blood to its gills, so it can breathe underwater.", "headline": "Two for breathing", "emojis": ["❤️", "🫧"], "background": "underwater", "pose": "point"},
+    {"narration": "The third heart pumps blood to the rest of its wiggly body.", "headline": "One for the body", "emojis": ["❤️", "🐙"], "background": "underwater", "pose": "explain"},
+    {"narration": "And here's the coolest part. Octopus blood is blue!", "headline": "Blue blood!", "emojis": ["🔵", "🐙"], "background": "underwater", "pose": "cheer"},
+    {"narration": "Three hearts and blue blood. Now you know!", "headline": "Now you know!", "emojis": ["🐙", "⭐"], "background": "sky", "pose": "wave"}
+  ],
+  "title": "Octopuses Have THREE Hearts?! 🐙 #Shorts",
+  "description": "A fun fact for curious kids.",
+  "tags": ["fun facts for kids"]
+}

@@ -1,0 +1,7 @@
+{"scenes": [
+ {"narration": "What happens to your body after six months in space?", "headline": "6 MONTHS IN SPACE", "emojis": ["🚀"], "background": "space", "pose": "think", "shout": "", "sfx": "whoosh"},
+ {"narration": "Day one. Your stomach has no idea which way is down. [sighs] Space sickness.", "headline": "DAY 1", "emojis": ["🤢"], "background": "space", "pose": "faint", "shout": "NOPE.", "sfx": "boom"},
+ {"narration": "Week two. Fluid floats to your head. Puffy face, skinny bird legs.", "headline": "WEEK 2", "emojis": ["💧", "🦵"], "background": "night", "pose": "shrug", "shout": "", "sfx": "none"},
+ {"narration": "Month three. Your spine stretches. You are about two inches taller.", "headline": "MONTH 3", "emojis": ["📏"], "background": "city", "pose": "cheer", "shout": "FINALLY.", "sfx": "tada"},
+ {"narration": "Now you are back on Earth, and walking feels like a boss fight.", "headline": "THE RETURN", "emojis": ["🌍"], "background": "sky", "pose": "run", "shout": "", "sfx": "sting"}
+]}
