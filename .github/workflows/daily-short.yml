@@ -13,9 +13,14 @@ on:
         description: "Topic (optional), e.g. why cats purr. Empty lets the agent pick."
         type: string
         default: ""
+      upload_from_run:
+        description: "Upload the video an earlier run made instead (its run ID from the Actions page URL)"
+        type: string
+        default: ""
 
 permissions:
   contents: write            # to commit history.json so facts never repeat
+  actions: read              # to fetch an earlier run's video
 
 jobs:
   post:
@@ -28,7 +33,22 @@ jobs:
           python-version: "3.12"
       - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-color-emoji
       - run: pip install -r requirements.txt
+      - name: Fetch the earlier run's video
+        if: inputs.upload_from_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.upload_from_run }}
+          github-token: ${{ github.token }}
+          path: saved/
+      - name: Upload the earlier run's video
+        if: inputs.upload_from_run != ''
+        env:
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+        run: python -m tools.upload_saved saved/
       - name: Make and upload today's Short
+        if: inputs.upload_from_run == ''
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
