@@ -45,8 +45,10 @@ Never paste them in a chat or commit them.
 ## Running it
 - **Test without posting:** Actions tab → *Daily Short* → *Run workflow*. *Dry run* is ticked by default.
   Type a *Topic* to choose today's fact, or leave it empty. The finished video is attached to the run under *Artifacts*.
-- **Daily:** it runs automatically at 16:00 UTC. Change the `cron` line in
-  `.github/workflows/daily-short.yml` to pick another time.
+- **Twice a day:** it runs automatically at 11:00 and 19:00 UTC, and YouTube publishes each
+  Short at the next time in `youtube.publish_times` in `config.yaml` (9am and 5pm Eastern).
+  Change those times there, and the `cron` lines in `.github/workflows/daily-short.yml`
+  so each run starts a few hours before its time.
 
 ## Private vs public
 Uploads start as **private** (`youtube.privacy` in `config.yaml`), so you can watch each one in
