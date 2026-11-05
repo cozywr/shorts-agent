@@ -18,6 +18,28 @@ from agent import fact_writer, sounds, uploader, video, voices
 
 ROOT = Path(__file__).resolve().parent.parent
 
+TOPICS_FILE = ROOT / "topics.txt"
+
+
+def next_planned_topic() -> str | None:
+    """The first topic in topics.txt, or None when the list is empty."""
+    if not TOPICS_FILE.exists():
+        return None
+    for line in TOPICS_FILE.read_text().splitlines():
+        if line.strip() and not line.lstrip().startswith("#"):
+            return line.strip()
+    return None
+
+
+def remove_planned_topic(topic: str) -> None:
+    lines = TOPICS_FILE.read_text().splitlines(keepends=True)
+    for i, line in enumerate(lines):
+        if line.strip() == topic:
+            del lines[i]
+            break
+    TOPICS_FILE.write_text("".join(lines))
+
+
 YOUTUBE_SECRETS = ("YOUTUBE_CLIENT_ID", "YOUTUBE_CLIENT_SECRET", "YOUTUBE_REFRESH_TOKEN")
 
 
@@ -47,6 +69,11 @@ def run(dry_run: bool, topic: str | None = None) -> None:
     workdir = ROOT / "output" / date.today().isoformat()
     workdir.mkdir(parents=True, exist_ok=True)
 
+    planned = None
+    if not topic:
+        topic = planned = next_planned_topic()
+        if planned:
+            print(f"Topic from topics.txt: {planned}")
     script = fact_writer.write_fact(config, [h["summary"] for h in history["facts"]], topic)
     (workdir / "script.json").write_text(json.dumps(script, indent=2, ensure_ascii=False))
     text, starts = narration_text(script["scenes"])
@@ -79,6 +106,8 @@ def run(dry_run: bool, topic: str | None = None) -> None:
     history["facts"].append({"date": date.today().isoformat(), "topic": script["topic"],
                              "summary": script["summary"], "url": url})
     history_file.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
+    if planned:
+        remove_planned_topic(planned)
 
 
 if __name__ == "__main__":

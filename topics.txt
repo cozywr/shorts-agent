@@ -1,0 +1,55 @@
+# Upcoming "What if" topics, used from the top down: each scheduled video takes the first one
+# and removes it after it's uploaded. Edit freely: add, delete or reorder lines.
+# When the list is empty, Claude picks a fresh topic itself. Lines starting with # are ignored.
+What if you stopped sleeping for a week
+What if you could stop time but kept aging
+What if you fell into the Mariana Trench
+Why your brain remembers embarrassing moments years later
+What if you drank only coffee for 30 days
+What if you could read everyone's mind for a day
+What if you were stranded on a tiny island in the Pacific
+Why you can't tickle yourself
+What if you stopped drinking water
+What if you could never feel pain
+What if you got lost in the Sahara with one bottle of water
+Why time feels faster as you get older
+What if you lived in Antarctica through the winter without heat
+What if you could teleport but only 10 meters at a time
+What if you were swallowed by a whale
+Why you feel someone staring at you
+What if you sat in a sauna that never turned off
+What if you were invisible but couldn't turn it off
+What if you were trapped in an elevator for a week
+Why your brain makes up memories that never happened
+What if you ate nothing but fast food for a month
+What if you could breathe underwater
+What if you got stuck in a snowstorm on Mount Everest
+Why we procrastinate even when we know better
+What if you never looked at your phone for 30 days
+What if you could fly but only 2 meters off the ground
+What if you were lost in the Amazon rainforest
+Why music gives you chills
+What if you stayed awake in total darkness for 3 days
+What if you were the only person left on Earth
+What if you were stuck on a raft in the middle of the ocean
+Why you suddenly forget why you walked into a room
+What if you ate only sugar for a week
+What if you could talk to animals
+What if you lived inside a volcano crater
+Why yawning is contagious
+What if you went to the bottom of the ocean in a submarine with no lights
+What if you could rewind the last 10 seconds of your life
+What if you were stuck in a desert during a sandstorm
+Why you feel like you're falling right as you fall asleep
+What if you never sat down for a whole week
+What if you had super strength but no control over it
+What if you got stranded on the Moon
+Why some people can't stop overthinking at night
+What if you walked across America
+What if gravity turned off for 5 seconds
+What if you got trapped in a cave as it flooded
+Why you hear your phone buzz when it didn't
+What if you held your breath as long as possible
+What if you could live forever
+What if you spent a year completely alone in a cabin
+Why déjà vu happens
