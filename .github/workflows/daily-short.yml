@@ -17,7 +17,7 @@ on:
         type: string
         default: ""
       publish_at:
-        description: "Go public at this time (Eastern, e.g. 20:00). Empty keeps a hand-started upload private."
+        description: "Go public at this time (Eastern, e.g. 20:00, or now). Empty keeps a hand-started upload private."
         type: string
         default: ""
       upload_from_run:

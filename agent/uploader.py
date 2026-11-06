@@ -51,7 +51,9 @@ def upload(video: Path, script: dict, config: dict) -> str:
                    "containsSyntheticMedia": False},
     }
     when = None
-    if os.environ.get("PUBLISH_AT"):  # a hand-started run that should still go public, e.g. "20:00"
+    if os.environ.get("PUBLISH_AT", "").lower() == "now":  # public the moment it's uploaded
+        body["status"]["privacyStatus"] = "public"
+    elif os.environ.get("PUBLISH_AT"):  # a hand-started run that should still go public, e.g. "20:00"
         when = publish_time({**yt, "publish_times": [os.environ["PUBLISH_AT"]]})
     elif os.environ.get("PUBLISH_ON_SCHEDULE") == "true":
         when = publish_time(yt)
