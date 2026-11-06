@@ -16,6 +16,10 @@ on:
         description: "Topic (optional), e.g. why cats purr. Empty lets the agent pick."
         type: string
         default: ""
+      publish_at:
+        description: "Go public at this time (Eastern, e.g. 20:00). Empty keeps a hand-started upload private."
+        type: string
+        default: ""
       upload_from_run:
         description: "Upload the video an earlier run made instead (its run ID from the Actions page URL)"
         type: string
@@ -60,6 +64,7 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           TOPIC: ${{ inputs.topic }}
           PUBLISH_ON_SCHEDULE: ${{ github.event_name == 'schedule' }}
+          PUBLISH_AT: ${{ inputs.publish_at }}
         run: python -m agent.main ${{ inputs.dry_run && '--dry-run' || '' }}
       - name: Keep the video so you can watch it
         if: always()

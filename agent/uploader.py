@@ -50,7 +50,11 @@ def upload(video: Path, script: dict, config: dict) -> str:
         "status": {"privacyStatus": yt["privacy"], "selfDeclaredMadeForKids": yt.get("made_for_kids", True),
                    "containsSyntheticMedia": False},
     }
-    when = publish_time(yt) if os.environ.get("PUBLISH_ON_SCHEDULE") == "true" else None
+    when = None
+    if os.environ.get("PUBLISH_AT"):  # a hand-started run that should still go public, e.g. "20:00"
+        when = publish_time({**yt, "publish_times": [os.environ["PUBLISH_AT"]]})
+    elif os.environ.get("PUBLISH_ON_SCHEDULE") == "true":
+        when = publish_time(yt)
     if when:  # YouTube keeps it private and makes it public by itself at this time
         body["status"].update({"privacyStatus": "private", "publishAt": when})
         print(f"Will go public at {when} (UTC)")
