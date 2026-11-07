@@ -239,12 +239,25 @@ def _layers(kind: str) -> list[tuple[Image.Image, float]]:
             in enumerate(LAYERS.get(kind, LAYERS["sky"]))]
 
 
+@lru_cache(maxsize=None)
+def _bloom(kind: str) -> Image.Image:
+    """The bright parts of the sky, blurred wide: the light spills and glows like a camera lens."""
+    sky = _sky(kind).convert("L").point(lambda v: max(0, v - 150) * 2)
+    glow = sky.resize((W // 8, H // 8), Image.BILINEAR).filter(ImageFilter.GaussianBlur(9)).resize((W, H), Image.BILINEAR)
+    out = Image.new("RGBA", (W, H), tuple(_mix(LOOKS[kind][3], (255, 255, 255), 0.3)) + (0,))
+    out.putalpha(glow)
+    return out
+
+
 def _scene_background(kind: str, t: float) -> Image.Image:
     frame = _sky(kind).copy()
     _particles(frame, kind, t)
     for img, speed in _layers(kind):
         x = -int((PAD / 2 + math.sin(t * 0.05) * 0 + t * speed) % PAD) if speed else 0
         frame.alpha_composite(img, (0, 0), (-x, 0, -x + W, H))
+    # shallow depth of field: the scenery is slightly soft so the sharp stickman stands out
+    frame = frame.resize((W // 2, H // 2), Image.BILINEAR).filter(ImageFilter.GaussianBlur(1.6)).resize((W, H), Image.BILINEAR)
+    frame.alpha_composite(_bloom(kind))
     return frame
 
 
@@ -280,6 +293,47 @@ def _particles(frame: Image.Image, kind: str, t: float) -> None:
 # ---------------------------------------------------------------- silhouettes
 
 SS = 2
+CAP = (214, 58, 48)
+EYE = (246, 244, 236)
+
+
+def _face(d, hc, r, face, k):
+    """Simple white eyes and mouth, looking the way he faces, so you can read how he feels."""
+    ex = [hc[0] + r * 0.12, hc[0] + r * 0.56]
+    ey = hc[1] + r * 0.05
+    w = 4 * k
+    if face == "dizzy":
+        for x in ex:
+            e = r * 0.13
+            d.line((x - e, ey - e, x + e, ey + e), fill=EYE, width=w)
+            d.line((x - e, ey + e, x + e, ey - e), fill=EYE, width=w)
+    elif face in ("joy", "laugh"):
+        for x in ex:
+            e = r * 0.15
+            d.arc((x - e, ey - e * 0.6, x + e, ey + e * 1.2), 200, 340, fill=EYE, width=w)
+    elif face == "think":
+        for x in ex:
+            d.line((x - r * 0.13, ey, x + r * 0.13, ey), fill=EYE, width=w)
+        d.line((ex[1] - r * 0.16, ey - r * 0.3, ex[1] + r * 0.16, ey - r * 0.38), fill=EYE, width=w)  # raised brow
+    else:
+        big = 1.35 if face == "wow" else 1.0
+        for x in ex:
+            e = r * 0.13 * big
+            d.ellipse((x - e * 0.8, ey - e, x + e * 0.8, ey + e), fill=EYE)
+            pe = e * 0.45
+            d.ellipse((x + e * 0.25 - pe, ey - pe * 0.6, x + e * 0.25 + pe, ey + pe * 1.4), fill=SIL)
+    mx, my = hc[0] + r * 0.38, hc[1] + r * 0.5
+    if face == "wow":
+        m = r * 0.12
+        d.ellipse((mx - m * 0.8, my - m, mx + m * 0.8, my + m), outline=EYE, width=w)
+    elif face == "laugh":
+        m = r * 0.2
+        d.chord((mx - m, my - m, mx + m, my + m), 0, 180, fill=EYE)
+    elif face in ("happy", "joy"):
+        m = r * 0.17
+        d.arc((mx - m, my - m * 1.2, mx + m, my + m * 0.6), 20, 160, fill=EYE, width=w)
+    elif face == "think":
+        d.line((mx - r * 0.1, my, mx + r * 0.12, my - r * 0.04), fill=EYE, width=w)
 
 
 def _limb(d, start, upper, lower, l1, l2, width):
@@ -294,7 +348,7 @@ def draw_silhouette(p: dict) -> Image.Image:
     k = SS
     img = Image.new("RGBA", (BOX_W * k, BOX_H * k), (0, 0, 0, 0))
     d = ImageDraw.Draw(img)
-    lw = 24 * k
+    lw = 30 * k
 
     def leg_drop(leg):
         return _vec(leg[0], THIGH)[1] + _vec(leg[0] + leg[1], SHIN)[1]
@@ -311,12 +365,14 @@ def draw_silhouette(p: dict) -> Image.Image:
     tilt = p["tilt"]
     hc = (neck[0] + _vec(180 - lean + tilt, NECK + HEAD_R)[0] * k, neck[1] + _vec(180 - lean + tilt, NECK + HEAD_R)[1] * k)
     r = HEAD_R * k
+    d.line((neck, hc), fill=SIL, width=lw)
     d.ellipse((hc[0] - r, hc[1] - r, hc[0] + r, hc[1] + r), fill=SIL)
-    # cap brim, pointing where he looks, so he's still "our" guy in silhouette
-    a = math.radians(-tilt)
-    bx, by = hc[0] + r * 0.55 * math.cos(a) + r * 0.1, hc[1] - r * 0.55
-    d.polygon([(bx - r * 0.2, by - r * 0.12), (bx + r * 0.95, by + r * 0.02), (bx + r * 0.95, by + r * 0.2),
-               (bx - r * 0.2, by + r * 0.2)], fill=SIL)
+    # his red cap: the crown over the top of the head and a brim pointing the way he faces
+    d.chord((hc[0] - r * 1.02, hc[1] - r * 1.04, hc[0] + r * 1.02, hc[1] + r * 0.9), 192, 348, fill=CAP)
+    by = hc[1] - r * 0.42
+    d.polygon([(hc[0] + r * 0.3, by - r * 0.1), (hc[0] + r * 1.45, by + r * 0.04), (hc[0] + r * 1.4, by + r * 0.2),
+               (hc[0] + r * 0.3, by + r * 0.16)], fill=_mix(CAP, (0, 0, 0), 0.25))
+    _face(d, hc, r, p.get("face", "happy"), k)
     return img.reduce(k)
 
 
@@ -384,10 +440,11 @@ def _draw_props(frame, emojis, t, cache_dir, kind="sky"):
 
 @lru_cache(maxsize=64)
 def _title_sprite(text: str) -> Image.Image:
+    """Warm golden headline with a dark outline and a soft glow, like a movie title."""
     text = text.upper().strip()
-    size = 104
+    size = 112
     font = _font(size)
-    while font.getlength(text) > 940 and size > 56:
+    while font.getlength(text) > 940 and size > 60:
         size -= 6
         font = _font(size)
     lines = [text]
@@ -396,16 +453,58 @@ def _title_sprite(text: str) -> Image.Image:
         half = len(words) // 2
         lines = [" ".join(words[:half]), " ".join(words[half:])]
     lh = int(size * 1.12)
-    img = Image.new("RGBA", (W, lh * len(lines) + 80), (0, 0, 0, 0))
-    shadow = Image.new("RGBA", img.size, (0, 0, 0, 0))
-    sd, d = ImageDraw.Draw(shadow), ImageDraw.Draw(img)
+    h = lh * len(lines) + 120
+    mask = Image.new("L", (W, h), 0)
+    stroke = Image.new("L", (W, h), 0)
+    md, sd = ImageDraw.Draw(mask), ImageDraw.Draw(stroke)
     for i, line in enumerate(lines):
-        y = 40 + lh * i + lh / 2
-        sd.text((W / 2, y + 6), line, font=font, fill=(0, 0, 0, 170), anchor="mm")
-        d.text((W / 2, y), line, font=font, fill=(255, 255, 255), anchor="mm")
-    shadow = shadow.filter(ImageFilter.GaussianBlur(10))
-    shadow.alpha_composite(img)
-    return shadow
+        y = 60 + lh * i + lh / 2
+        md.text((W / 2, y), line, font=font, fill=255, anchor="mm")
+        sd.text((W / 2, y), line, font=font, fill=255, anchor="mm", stroke_width=max(4, size // 16))
+    grad = _gradient3((255, 247, 222), (255, 222, 150), (255, 172, 70), height=h, width=W).convert("RGBA")
+    out = Image.new("RGBA", (W, h), (255, 150, 60, 0))
+    out.putalpha(stroke.filter(ImageFilter.GaussianBlur(22)).point(lambda v: v * 150 // 255))   # glow
+    edge = Image.new("RGBA", (W, h), (58, 28, 20, 0))
+    edge.putalpha(stroke)
+    out.alpha_composite(edge)
+    grad.putalpha(mask)
+    out.alpha_composite(grad)
+    return out
+
+
+@lru_cache(maxsize=1)
+def _clock_face() -> Image.Image:
+    r, k = 54, 3
+    img = Image.new("RGBA", (r * 2 * k + 8 * k, r * 2 * k + 8 * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    c = img.width / 2
+    d.ellipse((c - r * k, c - r * k, c + r * k, c + r * k), fill=(20, 18, 30, 200), outline=(240, 236, 226), width=5 * k)
+    for i in range(12):
+        a = math.radians(i * 30)
+        r1, r2 = r * k * (0.72 if i % 3 else 0.62), r * k * 0.84
+        d.line((c + r1 * math.sin(a), c - r1 * math.cos(a), c + r2 * math.sin(a), c - r2 * math.cos(a)),
+               fill=(240, 236, 226), width=3 * k)
+    return img.reduce(k)
+
+
+def _draw_clock(frame, t):
+    """A small ticking clock above time markers like DAY 3 or HOUR 17."""
+    k = _out_back(min(1.0, t / 0.35))
+    if k <= 0:
+        return
+    face = _clock_face().copy()
+    d = ImageDraw.Draw(face)
+    c = face.width / 2
+    a = math.radians(t * 240)
+    d.line((c, c, c + 40 * math.sin(a), c - 40 * math.cos(a)), fill=(255, 196, 90), width=5)
+    d.line((c, c, c + 26 * math.sin(a / 12), c - 26 * math.cos(a / 12)), fill=(240, 236, 226), width=6)
+    d.ellipse((c - 6, c - 6, c + 6, c + 6), fill=(255, 196, 90))
+    if k < 0.999:
+        face = face.resize((max(1, int(face.width * k)), max(1, int(face.height * k))), Image.BILINEAR)
+    frame.alpha_composite(face, (int(W / 2 - face.width / 2), int(165 - face.height / 2)))
+
+
+TIME_WORDS = ("SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR")
 
 
 def _draw_title(frame, text, t):
@@ -420,6 +519,8 @@ def _draw_title(frame, text, t):
         a = min(1.0, t / 0.12)
         img.putalpha(img.getchannel("A").point(lambda v: int(v * a)))
     frame.alpha_composite(img, (int((W - img.width) / 2), int(300 - img.height / 2)))
+    if any(w in text.upper() for w in TIME_WORDS):
+        _draw_clock(frame, t)
 
 
 @lru_cache(maxsize=64)
@@ -487,13 +588,19 @@ def _rotate(man: Image.Image, angle: float, spin: bool, lift: float):
 
 _last: dict[int, Image.Image] = {}
 def _rim_lit(man: Image.Image, color) -> Image.Image:
-    """A soft halo of the scene's light around the silhouette, so he never disappears into a dark sky."""
+    """Edge light from the scene's light (upper right), like a sunset catching his outline,
+    plus a faint halo so he never disappears into a dark sky."""
     a = man.getchannel("A")
+    shifted = ImageChops.offset(a, -6, 5)
+    rim = ImageChops.subtract(a, shifted).filter(ImageFilter.GaussianBlur(1.2))
     small = a.resize((a.width // 4, a.height // 4), Image.BILINEAR).filter(ImageFilter.MaxFilter(5))
-    halo = small.filter(ImageFilter.GaussianBlur(4)).resize(a.size, Image.BILINEAR).point(lambda v: v * 150 // 255)
+    halo = small.filter(ImageFilter.GaussianBlur(4)).resize(a.size, Image.BILINEAR).point(lambda v: v * 90 // 255)
     out = Image.new("RGBA", man.size, tuple(color) + (0,))
     out.putalpha(halo)
     out.alpha_composite(man)
+    lit = Image.new("RGBA", man.size, tuple(_mix(color, (255, 255, 255), 0.35)) + (0,))
+    lit.putalpha(rim.point(lambda v: min(255, v * 2)))
+    out.alpha_composite(lit)
     return out
 
 
