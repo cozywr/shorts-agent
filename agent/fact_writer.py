@@ -109,6 +109,10 @@ Format:
   faint = collapses flat on his back, spin = flips in the air, run = runs back and forth in a panic,
   laugh = can't stop laughing, scared = shaking with his arms up.
   Never the same pose twice in a row; save faint/run/scared for the big moments.
+- stat: the key real number of the scene, shown huge on screen and counting up as it's said:
+  "0.25 S", "47%", "11,000 M", "-40°C", "3 DAYS", "600,000 STEPS". Only a number the narration of
+  that scene actually says, with a short unit. Use it in 2 to 4 scenes for the most striking numbers,
+  otherwise empty. A scene with a stat uses at most 2 emojis.
 - sfx: the sound at the start of the scene, one of {sounds}. Dramatic ones (boom, sting, heartbeat,
   clock, alarm, crowd_gasp, crickets, record_scratch) fit this channel best. Use "none" sometimes.
 - Don't repeat any of these earlier topics: {used}
@@ -140,8 +144,9 @@ SCHEMA = {
                     "pose": {"type": "string", "enum": POSES},
                     "shout": {"type": "string"},
                     "sfx": {"type": "string", "enum": SOUNDS},
+                    "stat": {"type": "string"},
                 },
-                "required": ["narration", "headline", "emojis", "background", "pose", "shout", "sfx"],
+                "required": ["narration", "headline", "emojis", "background", "pose", "shout", "sfx", "stat"],
                 "additionalProperties": False,
             },
         },
@@ -203,15 +208,17 @@ Topic: {summary}
 {lines}
 
 Reply as JSON: the narration for every scene in the same order (same number of scenes: {n}),
-and a short note for each change you made (empty list if nothing needed fixing)."""
+the on-screen number for every scene (keep it, fix it to match your corrected narration, or empty
+it if the number is gone), and a short note for each change you made (empty list if nothing needed fixing)."""
 
 CHECK_SCHEMA = {
     "type": "object",
     "properties": {
         "narrations": {"type": "array", "items": {"type": "string"}},
+        "stats": {"type": "array", "items": {"type": "string"}},
         "changes": {"type": "array", "items": {"type": "string"}},
     },
-    "required": ["narrations", "changes"],
+    "required": ["narrations", "stats", "changes"],
     "additionalProperties": False,
 }
 
@@ -219,7 +226,8 @@ CHECK_SCHEMA = {
 def fact_check(s: dict, script: dict) -> dict:
     """A second, separate pass that fixes or removes shaky claims before anything is voiced."""
     scenes = script["scenes"]
-    lines = "\n".join(f"Scene {i + 1}: {sc['narration']}" for i, sc in enumerate(scenes))
+    lines = "\n".join(f"Scene {i + 1}: {sc['narration']}" + (f"  [on-screen number: {sc['stat']}]" if sc.get("stat") else "")
+                      for i, sc in enumerate(scenes))
     try:
         result = _ask(s, CHECK_PROMPT.format(summary=script["summary"], lines=lines, n=len(scenes)), CHECK_SCHEMA)
     except Exception as err:  # the check failing shouldn't stop the day's video
@@ -230,5 +238,8 @@ def fact_check(s: dict, script: dict) -> dict:
         for sc, text in zip(scenes, result["narrations"]):
             if text.strip():
                 sc["narration"] = text.strip()
+    if len(result.get("stats", [])) == len(scenes):
+        for sc, stat in zip(scenes, result["stats"]):
+            sc["stat"] = stat.strip()
     script["fact_check"] = result["changes"]
     return script

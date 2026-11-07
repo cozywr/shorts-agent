@@ -7,6 +7,7 @@ Uses the same scene script and stickman poses as animation.py, so either look ca
 import math
 import os
 import random
+import re
 from functools import lru_cache
 from pathlib import Path
 
@@ -585,6 +586,80 @@ def _draw_clock(frame, t):
     frame.alpha_composite(face, (int(W / 2 - face.width / 2), int(165 - face.height / 2)))
 
 
+STAT_RE = re.compile(r"^([^\d\-+]*)([\-+]?)([\d,]*\.?\d+)(.*)$")
+
+
+@lru_cache(maxsize=256)
+def _stat_text_sprite(text: str, size: int) -> Image.Image:
+    font = _font(size)
+    tw = int(font.getlength(text)) + 40
+    h = int(size * 1.4)
+    mask = Image.new("L", (tw, h), 0)
+    ImageDraw.Draw(mask).text((tw / 2, h / 2), text, font=font, fill=255, anchor="mm")
+    grad = _gradient3((255, 250, 232), (255, 224, 150), (255, 176, 74), height=h, width=tw).convert("RGBA")
+    grad.putalpha(mask)
+    return grad
+
+
+@lru_cache(maxsize=32)
+def _stat_card(w: int, h: int) -> Image.Image:
+    k = 2
+    card = Image.new("RGBA", (w * k, h * k), (0, 0, 0, 0))
+    d = ImageDraw.Draw(card)
+    d.rounded_rectangle((0, 0, w * k - 1, h * k - 1), 34 * k, fill=(14, 12, 24, 190), outline=(255, 214, 140, 120), width=3 * k)
+    return card.reduce(k)
+
+
+def _draw_stat(frame, stat, t):
+    """The scene's key number, huge, counting up from zero like a stopwatch."""
+    stat = stat.strip().upper()
+    if not stat or t < 0.25:
+        return
+    t -= 0.25
+    m = STAT_RE.match(stat)
+    k = _out_cubic(min(1.0, t / 1.1))
+    unit = ""
+    if m:
+        pre, sign, num, unit = m.groups()
+        decimals = len(num.split(".")[1]) if "." in num else 0
+        value = float(num.replace(",", "")) * k
+        shown = f"{value:,.{decimals}f}" if "," in num else f"{value:.{decimals}f}"
+        big, big_final = f"{pre}{sign}{shown}", f"{pre}{sign}{num}"
+    else:
+        big = big_final = stat
+    # short units (S, %, °C, M) stay full size; words (DAYS, STEPS) sit smaller beside the number
+    word = len(unit.strip()) > 2
+    size = 150
+    def width(sz):
+        return _font(sz).getlength(big_final + ("" if word else unit)) + (_font(int(sz * 0.42)).getlength(unit) + 20 if word else 0)
+    while width(size) > 780 and size > 70:
+        size -= 8
+    num_spr = _stat_text_sprite(big + ("" if word else unit), size)
+    unit_spr = _stat_text_sprite(unit.strip(), int(size * 0.42)) if word else None
+    final_w = int(width(size))
+    w, h = max(320, final_w + 110), int(size * 1.5)
+    pop = _out_back(min(1.0, t / 0.35))
+    card = _stat_card(w, h)
+    glow = Image.new("RGBA", (w + 120, h + 120), (255, 160, 70, 0))
+    gm = Image.new("L", glow.size, 0)
+    ImageDraw.Draw(gm).rounded_rectangle((60, 60, 60 + w, 60 + h), 34, fill=int(110 * min(1.0, t / 0.3)))
+    glow.putalpha(gm.filter(ImageFilter.GaussianBlur(26)))
+    layer = Image.new("RGBA", glow.size, (0, 0, 0, 0))
+    layer.alpha_composite(glow)
+    layer.alpha_composite(card, (60, 60))
+    x0 = 60 + (w - final_w) / 2 - 20
+    layer.alpha_composite(num_spr, (int(x0), int(60 + h / 2 - num_spr.height / 2 - 6)))
+    if unit_spr is not None:
+        ux = x0 + _font(size).getlength(big_final) + 30
+        layer.alpha_composite(unit_spr, (int(ux), int(60 + h / 2 - unit_spr.height / 2 + size * 0.18)))
+    bar = int((w - 80) * k)   # a thin bar fills as it counts
+    ImageDraw.Draw(layer).rounded_rectangle((100, 60 + h - 22, 100 + max(6, bar), 60 + h - 14), 4, fill=(255, 196, 90, 230))
+    if pop < 0.999:
+        layer = layer.resize((max(1, int(layer.width * pop)), max(1, int(layer.height * pop))), Image.BILINEAR)
+    cx, cy = W / 2, 515
+    frame.alpha_composite(layer, (int(cx - layer.width / 2), int(cy - layer.height / 2)))
+
+
 TIME_WORDS = ("SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR")
 
 
@@ -617,7 +692,7 @@ def _pill_sprite(text: str) -> Image.Image:
     return img
 
 
-def _draw_pill(frame, text, t, x):
+def _draw_pill(frame, text, t, x, base=690):
     if not text.strip() or t < 0.25 or t > 2.4:
         return
     k = min(_ease((t - 0.25) / 0.2), _ease((2.4 - t) / 0.25))
@@ -626,7 +701,7 @@ def _draw_pill(frame, text, t, x):
         img = img.copy()
         img.putalpha(img.getchannel("A").point(lambda v: int(v * k)))
     cx = max(img.width / 2 + 20, min(W - img.width / 2 - 20, x + 60))
-    frame.alpha_composite(img, (int(cx - img.width / 2), int(690 - img.height + (1 - k) * 15)))
+    frame.alpha_composite(img, (int(cx - img.width / 2), int(base - img.height + (1 - k) * 15)))
 
 
 # ---------------------------------------------------------------- finishing
@@ -740,7 +815,8 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
 
     # text sits on top of the camera move so it stays steady and sharp
     _draw_title(frame, scene.get("headline", ""), t_scene)
-    _draw_pill(frame, scene.get("shout", ""), t_scene, HOST_X + p["dx"])
+    _draw_stat(frame, scene.get("stat", ""), t_scene)
+    _draw_pill(frame, scene.get("shout", ""), t_scene, HOST_X + p["dx"], 790 if scene.get("stat") else 690)
     frame.alpha_composite(_vignette())
     frame.alpha_composite(_grain(int(t_total * 24) % 6))
     out = frame.convert("RGB")
