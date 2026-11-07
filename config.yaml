@@ -24,7 +24,20 @@ narrator:
   say_as: {}
 
 video:
-  look: cinematic         # cinematic (silhouettes, glowing skies, film grain) or cartoon (bright, for kids)
+  look: cinematic
+  # what the stickman wears (cinematic look). hat: cap, beanie, headphones, hair or none;
+  # top: none, tee, hoodie or jacket; colours are [red, green, blue]
+  outfit:
+    hat: hair
+    hat_color: [22, 20, 32]
+    top: jacket
+    top_color: [60, 58, 72]
+    shirt_color: [118, 118, 130]
+    fur: [48, 45, 56]
+    necklace: true
+    belt: true
+    boots: [30, 28, 34]
+    pants_color: [30, 28, 36]         # cinematic (silhouettes, glowing skies, film grain) or cartoon (bright, for kids)
   speed: 1.0              # narration speed (1 = as recorded); captions stay in sync
   max_seconds: 60
   music_volume: 0.12      # background music under the voice (0 turns it off)

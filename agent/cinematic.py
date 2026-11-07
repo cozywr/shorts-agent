@@ -294,6 +294,9 @@ def _particles(frame: Image.Image, kind: str, t: float) -> None:
 
 SS = 2
 CAP = (214, 58, 48)
+# what he wears; config.yaml video.outfit overrides any of these
+OUTFIT = {"hat": "cap", "hat_color": CAP, "top": "none", "top_color": (60, 110, 200), "pants_color": None,
+          "scarf": None, "glasses": False}
 EYE = (246, 244, 236)
 
 
@@ -336,12 +339,13 @@ def _face(d, hc, r, face, k):
         d.line((mx - r * 0.1, my, mx + r * 0.12, my - r * 0.04), fill=EYE, width=w)
 
 
-def _limb(d, start, upper, lower, l1, l2, width):
+def _limb(d, start, upper, lower, l1, l2, width, upper_fill=SIL, lower_fill=SIL):
     x1, y1 = start[0] + _vec(upper, l1)[0], start[1] + _vec(upper, l1)[1]
     x2, y2 = x1 + _vec(upper + lower, l2)[0], y1 + _vec(upper + lower, l2)[1]
-    d.line((start, (x1, y1), (x2, y2)), fill=SIL, width=width, joint="curve")
-    for x, y in (start, (x1, y1), (x2, y2)):
-        d.ellipse((x - width / 2, y - width / 2, x + width / 2, y + width / 2), fill=SIL)
+    d.line((start, (x1, y1)), fill=upper_fill, width=width)
+    d.line(((x1, y1), (x2, y2)), fill=lower_fill, width=width)
+    for (x, y), f in ((start, upper_fill), ((x2, y2), lower_fill), ((x1, y1), upper_fill)):
+        d.ellipse((x - width / 2, y - width / 2, x + width / 2, y + width / 2), fill=f)
 
 
 def draw_silhouette(p: dict) -> Image.Image:
@@ -357,22 +361,94 @@ def draw_silhouette(p: dict) -> Image.Image:
     lean = p["lean"]
     neck = (hip[0] + _vec(180 - lean, SPINE)[0] * k, hip[1] + _vec(180 - lean, SPINE)[1] * k)
     shoulder = (hip[0] + _vec(180 - lean, SPINE - 20)[0] * k, hip[1] + _vec(180 - lean, SPINE - 20)[1] * k)
+    o = OUTFIT
+    top, tc = o.get("top", "none"), tuple(o.get("top_color", (60, 110, 200)))
+    pants = tuple(o["pants_color"]) if o.get("pants_color") else SIL
     for leg in ("ll", "rl"):
-        _limb(d, hip, p[leg][0], p[leg][1], THIGH * k, SHIN * k, lw)
+        _limb(d, hip, p[leg][0], p[leg][1], THIGH * k, SHIN * k, lw, pants, pants)
+        if o.get("boots"):   # chunky boots on the lower third of each shin
+            kx = hip[0] + _vec(p[leg][0], THIGH * k)[0]
+            ky = hip[1] + _vec(p[leg][0], THIGH * k)[1]
+            ang = p[leg][0] + p[leg][1]
+            a1 = (kx + _vec(ang, SHIN * k * 0.6)[0], ky + _vec(ang, SHIN * k * 0.6)[1])
+            a2 = (kx + _vec(ang, SHIN * k * 1.02)[0], ky + _vec(ang, SHIN * k * 1.02)[1])
+            boot = tuple(o["boots"])
+            d.line((a1, a2), fill=boot, width=int(lw * 1.45))
+            d.ellipse((a2[0] - lw * 0.7, a2[1] - lw * 0.55, a2[0] + lw * 1.1, a2[1] + lw * 0.55), fill=boot)
     d.line((hip, neck), fill=SIL, width=lw)
-    for arm in ("la", "ra"):
-        _limb(d, shoulder, p[arm][0], p[arm][1], UPPER_ARM * k, LOWER_ARM * k, lw)
     tilt = p["tilt"]
     hc = (neck[0] + _vec(180 - lean + tilt, NECK + HEAD_R)[0] * k, neck[1] + _vec(180 - lean + tilt, NECK + HEAD_R)[1] * k)
     r = HEAD_R * k
+    if top == "hoodie":   # the hood, bunched up behind his neck
+        d.ellipse((hc[0] - r * 1.15, hc[1] + r * 0.35, hc[0] + r * 0.55, hc[1] + r * 1.25), fill=_mix(tc, (0, 0, 0), 0.3))
+    if top != "none":
+        waist = (hip[0] + _vec(180 - lean, 18)[0] * k, hip[1] + _vec(180 - lean, 18)[1] * k)
+        d.line((waist, shoulder), fill=tc, width=int(lw * 1.9))
+        for pt in (waist, shoulder):
+            d.ellipse((pt[0] - lw * 0.95, pt[1] - lw * 0.95, pt[0] + lw * 0.95, pt[1] + lw * 0.95), fill=tc)
+        if top == "jacket":   # open front showing the shirt underneath
+            inner = tuple(o.get("shirt_color") or _mix(tc, (0, 0, 0), 0.55))
+            d.line((waist, shoulder), fill=inner, width=int(lw * 0.7))
+    if o.get("belt"):
+        bx, byy = hip[0] + _vec(180 - lean, 22)[0] * k, hip[1] + _vec(180 - lean, 22)[1] * k
+        d.rectangle((bx - lw * 1.0, byy - lw * 0.3, bx + lw * 1.0, byy + lw * 0.3), fill=(24, 22, 28))
+        d.rectangle((bx - lw * 0.35, byy - lw * 0.38, bx + lw * 0.35, byy + lw * 0.38), outline=(214, 218, 228), width=3 * k)
+    sleeve = tc if top != "none" else SIL
+    lower_sleeve = tc if top in ("hoodie", "jacket") else SIL
+    for arm in ("la", "ra"):
+        _limb(d, shoulder, p[arm][0], p[arm][1], UPPER_ARM * k, LOWER_ARM * k, lw, sleeve, lower_sleeve)
     d.line((neck, hc), fill=SIL, width=lw)
+    if o.get("necklace"):
+        silver = (214, 218, 228)
+        d.arc((neck[0] - r * 0.45, neck[1] - r * 0.3, neck[0] + r * 0.45, neck[1] + r * 0.75), 20, 160, fill=silver, width=3 * k)
+        cx, cy = neck[0] + r * 0.02, neck[1] + r * 0.75
+        d.line((cx, cy - r * 0.02, cx, cy + r * 0.42), fill=silver, width=4 * k)
+        d.line((cx - r * 0.1, cy + r * 0.08, cx + r * 0.1, cy + r * 0.08), fill=silver, width=4 * k)
+    if o.get("fur"):
+        fc = tuple(o["fur"])
+        rnd = random.Random(3)
+        for i in range(34):   # a fluffy collar of little tufts all around the neck and shoulders
+            a = 2 * math.pi * i / 34
+            rr = r * (0.7 + rnd.uniform(0, 0.2))
+            x, y = neck[0] + rr * math.cos(a) * 1.1, neck[1] + rr * math.sin(a) * 0.38 + r * 0.25
+            e = r * rnd.uniform(0.2, 0.3)
+            d.ellipse((x - e, y - e, x + e, y + e), fill=_mix(fc, (255, 255, 255), rnd.uniform(0, 0.12)))
+    if o.get("scarf"):
+        sc = tuple(o["scarf"])
+        d.line((neck[0] - r * 0.1, neck[1] - r * 0.1, neck[0] - r * 0.75, neck[1] + r * 0.9), fill=sc, width=int(lw * 0.9))
+        d.ellipse((neck[0] - r * 0.6, neck[1] - r * 0.45, neck[0] + r * 0.6, neck[1] + r * 0.15), fill=sc)
     d.ellipse((hc[0] - r, hc[1] - r, hc[0] + r, hc[1] + r), fill=SIL)
-    # his red cap: the crown over the top of the head and a brim pointing the way he faces
-    d.chord((hc[0] - r * 1.02, hc[1] - r * 1.04, hc[0] + r * 1.02, hc[1] + r * 0.9), 192, 348, fill=CAP)
-    by = hc[1] - r * 0.42
-    d.polygon([(hc[0] + r * 0.3, by - r * 0.1), (hc[0] + r * 1.45, by + r * 0.04), (hc[0] + r * 1.4, by + r * 0.2),
-               (hc[0] + r * 0.3, by + r * 0.16)], fill=_mix(CAP, (0, 0, 0), 0.25))
+    hat, hcol = o.get("hat", "cap"), tuple(o.get("hat_color", CAP))
+    if hat == "cap":      # crown over the top of the head and a brim pointing the way he faces
+        d.chord((hc[0] - r * 1.02, hc[1] - r * 1.04, hc[0] + r * 1.02, hc[1] + r * 0.9), 192, 348, fill=hcol)
+        by = hc[1] - r * 0.42
+        d.polygon([(hc[0] + r * 0.3, by - r * 0.1), (hc[0] + r * 1.45, by + r * 0.04), (hc[0] + r * 1.4, by + r * 0.2),
+                   (hc[0] + r * 0.3, by + r * 0.16)], fill=_mix(hcol, (0, 0, 0), 0.25))
+    elif hat == "beanie":
+        d.chord((hc[0] - r * 1.05, hc[1] - r * 1.25, hc[0] + r * 1.05, hc[1] + r * 0.75), 180, 360, fill=hcol)
+        d.rounded_rectangle((hc[0] - r * 1.08, hc[1] - r * 0.42, hc[0] + r * 1.08, hc[1] - r * 0.12), r * 0.12,
+                            fill=_mix(hcol, (0, 0, 0), 0.2))
+        d.ellipse((hc[0] - r * 0.2, hc[1] - r * 1.45, hc[0] + r * 0.2, hc[1] - r * 1.05), fill=hcol)
+    elif hat == "headphones":
+        d.arc((hc[0] - r * 1.12, hc[1] - r * 1.2, hc[0] + r * 1.12, hc[1] + r * 1.0), 190, 350, fill=(40, 40, 52), width=int(r * 0.2))
+        d.rounded_rectangle((hc[0] - r * 0.6, hc[1] - r * 0.25, hc[0] - r * 0.15, hc[1] + r * 0.45), r * 0.15, fill=hcol)
+    elif hat == "hair":   # long shaggy hair; the bangs are drawn after the face so they cover one eye
+        pts = [(0.95, -0.35), (0.6, -1.18), (-0.2, -1.3), (-0.95, -0.98), (-1.28, -0.3), (-1.25, 0.95), (-1.02, 0.55),
+               (-0.92, 1.15), (-0.68, 0.62), (-0.5, 1.02), (-0.32, 0.45), (0.2, 0.2)]
+        d.polygon([(hc[0] + r * x, hc[1] + r * y) for x, y in pts], fill=hcol)
+    if o.get("glasses"):
+        for x in (hc[0] + r * 0.12, hc[0] + r * 0.56):
+            e = r * 0.24
+            d.ellipse((x - e, hc[1] + r * 0.05 - e, x + e, hc[1] + r * 0.05 + e), outline=EYE, width=4 * k)
+        d.line((hc[0] + r * 0.36, hc[1], hc[0] + r * 0.32, hc[1]), fill=EYE, width=4 * k)
     _face(d, hc, r, p.get("face", "happy"), k)
+    if hat == "hair":
+        bangs = [(-0.15, -0.95), (0.7, -1.0), (1.18, -0.55), (1.08, 0.12), (0.9, -0.08), (0.78, 0.38), (0.6, 0.02),
+                 (0.42, 0.34), (0.3, -0.12), (0.05, 0.02)]
+        d.polygon([(hc[0] + r * x, hc[1] + r * y) for x, y in bangs], fill=hcol)
+        shine = _mix(hcol, (255, 255, 255), 0.22)
+        for x1, y1, x2, y2 in ((0.0, -0.95, 0.75, -0.3), (-0.6, -0.95, -1.0, 0.4), (0.35, -0.98, 0.95, -0.55)):
+            d.line((hc[0] + r * x1, hc[1] + r * y1, hc[0] + r * x2, hc[1] + r * y2), fill=shine, width=3 * k)
     return img.reduce(k)
 
 

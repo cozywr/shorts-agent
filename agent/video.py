@@ -125,6 +125,7 @@ def assemble(scenes: list[dict], starts: list[int], narration: Path, alignment: 
     scene_times = [0.0] + [char_starts[min(c, len(char_starts) - 1)] / speed - 0.1 for c in starts[1:]]
     look = settings.get("look", "cartoon")
     renderer = cinematic if look == "cinematic" else animation
+    cinematic.OUTFIT.update(settings.get("outfit") or {})
     subs = captions(words(alignment), speed, workdir / "captions.ass", look)
     mouth = animation.mouth_track(alignment, speed)
 
