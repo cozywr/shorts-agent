@@ -53,6 +53,7 @@ jobs:
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          PUBLISH_AT: ${{ inputs.publish_at }}
         run: python -m tools.upload_saved saved/
       - name: Make and upload today's Short
         if: inputs.upload_from_run == ''

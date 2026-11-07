@@ -26,6 +26,9 @@ def main(folder: Path) -> None:
     history.setdefault("facts", []).append({"date": date.today().isoformat(), "topic": script["topic"],
                                             "summary": script["summary"], "url": url})
     history_file.write_text(json.dumps(history, indent=2, ensure_ascii=False) + "\n")
+    if script.get("planned_topic"):
+        from agent.main import remove_planned_topic
+        remove_planned_topic(script["planned_topic"])
 
 
 if __name__ == "__main__":

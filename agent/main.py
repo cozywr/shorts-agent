@@ -75,6 +75,8 @@ def run(dry_run: bool, topic: str | None = None) -> None:
         if planned:
             print(f"Topic from topics.txt: {planned}")
     script = fact_writer.write_fact(config, [h["summary"] for h in history["facts"]], topic)
+    if planned:
+        script["planned_topic"] = planned  # so a later re-upload of this video can cross it off
     (workdir / "script.json").write_text(json.dumps(script, indent=2, ensure_ascii=False))
     text, starts = narration_text(script["scenes"])
     print(f"Fact: {script['summary']} ({len(text.split())} words, {len(script['scenes'])} scenes)")

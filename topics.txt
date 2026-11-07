@@ -1,7 +1,6 @@
 # Upcoming "What if" topics, used from the top down: each scheduled video takes the first one
 # and removes it after it's uploaded. Edit freely: add, delete or reorder lines.
 # When the list is empty, Claude picks a fresh topic itself. Lines starting with # are ignored.
-What if you drank only coffee for 30 days
 What if you could read everyone's mind for a day
 What if you were stranded on a tiny island in the Pacific
 Why you can't tickle yourself
