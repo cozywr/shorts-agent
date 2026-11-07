@@ -427,10 +427,13 @@ def pose(name: str, t: float, ts: float | None = None) -> dict:
         p["tilt"] = 7
         p["face"] = "think"
     elif name == "walk":
-        w = s(t * 7)
-        p["ll"], p["rl"] = (28 * w, 15 * max(0.0, -w)), (-28 * w, 15 * max(0.0, w))
-        p["la"], p["ra"] = (-30 * w - 8, -20), (30 * w + 8, 20)
-        p["lift"] = 8 * abs(math.cos(t * 7))
+        ph = t * 6.5
+        for leg, off in (("rl", 0.0), ("ll", math.pi)):
+            f = ph + off
+            p[leg] = (24 * s(f), -6 - 45 * max(0.0, math.cos(f + 0.8)) ** 1.5)   # knee lifts as the leg swings through
+        p["ra"], p["la"] = (-22 * s(ph) + 6, 25), (22 * s(ph) - 6, 25)
+        p["lift"] = 7 * abs(math.cos(ph))
+        p["lean"] = 4
     elif name == "dance":
         w = s(t * 6)
         p["la"] = (-110 - 40 * w, -50 * w)
@@ -453,24 +456,33 @@ def pose(name: str, t: float, ts: float | None = None) -> dict:
         p["la"], p["ra"] = (-110, -20), (110, 20)
         p["face"] = "joy"
     elif name == "run":
-        w = s(t * 16)
-        p["ll"], p["rl"] = (45 * w, 40 * max(0.0, -w)), (-45 * w, 40 * max(0.0, w))
-        p["la"], p["ra"] = (-55 * w, 70), (55 * w, 70)
-        p["lift"] = 14 * abs(math.cos(t * 16))
-        p["dx"] = 170 * s(ts * 2.4)
-        p["lean"] = 14 * math.cos(ts * 2.4)
+        # a real run cycle: knees tuck as each leg swings forward, arms pump with bent elbows,
+        # body leans into the run and bounces twice per stride; he turns around at each end
+        ph = t * 10.5
+        for leg, off in (("rl", 0.0), ("ll", math.pi)):
+            f = ph + off
+            # stance: straight leg sweeping back; swing: heel kicks up behind, then the leg reaches forward
+            p[leg] = (42 * s(f) + 6, -10 - 105 * max(0.0, math.cos(f + 0.9)) ** 1.5)
+        p["ra"], p["la"] = (-48 * s(ph) + 10, 88), (48 * s(ph) + 10, 88)
+        p["lift"] = 10 + 16 * abs(math.cos(ph))
+        p["lean"] = 13
+        p["dx"] = 175 * s(ts * 1.15)
+        p["flip"] = math.cos(ts * 1.15) < 0          # running back towards the left
         p["face"] = "wow"
     elif name == "laugh":
-        shake = s(t * 30)
+        shake = s(t * 17)
         p["la"], p["ra"] = (-30, 110), (30, -110)    # holding his belly
         p["lift"] = 6 + 6 * shake
         p["lean"] = -6 + 3 * shake
         p["tilt"] = -10 + 4 * shake
         p["face"] = "laugh"
     elif name == "scared":
-        p["dx"] = 7 * s(t * 55)
-        p["la"], p["ra"] = (-150, 30), (150, -30)
-        p["ll"], p["rl"] = (-6, 8), (6, -8)
+        tremble = s(t * 21) * 0.6 + s(t * 13.7) * 0.4
+        p["dx"] = 5 * tremble
+        p["la"], p["ra"] = (-150 + 6 * tremble, 30), (150 - 6 * tremble, -30)
+        p["ll"], p["rl"] = (-14, 22), (14, -22)                   # knees knocking
+        p["lift"] = 0
+        p["lean"] = -6
         p["face"] = "wow"
     else:  # explain: friendly talking gestures
         g = s(t * 2.6)
@@ -491,6 +503,7 @@ def blend(a: dict, b: dict, k: float) -> dict:
     from_rot = from_rot - 360 if from_rot > 180 else from_rot
     out["rot"] = _lerp(from_rot, b["rot"], k)
     out["face"] = a["face"] if k < 0.5 else b["face"]
+    out["flip"] = a.get("flip", False) if k < 0.5 else b.get("flip", False)
     return out
 
 
@@ -668,6 +681,8 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
         p = blend(pose(prev_scene["pose"], t_total, t_scene + 99), p, _ease(t_scene / 0.3))
     blink = (t_total % 3.7) < 0.12
     man = draw_stickman(p, mouth_open, blink)
+    if p.get("flip"):
+        man = man.transpose(Image.FLIP_LEFT_RIGHT)
     x0, y0 = int(HOST_X - BOX_W / 2 + p["dx"]), int(GROUND + 30 - FOOT_Y)
     if p["rot"] % 360:
         man, ox, oy = _rotate_about_feet(man, p["rot"], scene["pose"] == "spin", p["lift"])

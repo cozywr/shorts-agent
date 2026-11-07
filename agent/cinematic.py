@@ -364,19 +364,20 @@ def _prop_layout(n: int):
 def _draw_props(frame, emojis, t, cache_dir, kind="sky"):
     emojis = emojis[:4]
     for i, (e, (x, y, size)) in enumerate(zip(emojis, _prop_layout(len(emojis)))):
-        k = _ease((t - 0.2 - i * 0.15) / 0.45)
-        if k <= 0:
+        x01 = (t - 0.2 - i * 0.15) / 0.4
+        if x01 <= 0:
             continue
+        k = min(1.0, x01 * 2.5)                      # opacity
         img = _prop_silhouette(e, size, cache_dir, kind)
         if img is None:
             continue
-        s = 0.85 + 0.15 * k
-        sprite = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))), Image.BILINEAR) if s < 0.999 else img
+        s = 0.4 + 0.6 * _out_back(x01)
+        sprite = img.resize((max(1, int(img.width * s)), max(1, int(img.height * s))), Image.BILINEAR) if abs(s - 1) > 0.001 else img
         if k < 1:
             sprite = sprite.copy()
             sprite.putalpha(sprite.getchannel("A").point(lambda v, k=k: int(v * k)))
         bob = 10 * math.sin(t * 1.6 + i)
-        frame.alpha_composite(sprite, (int(x - sprite.width / 2), int(y + bob - sprite.height / 2 + (1 - k) * 40)))
+        frame.alpha_composite(sprite, (int(x - sprite.width / 2), int(y + bob - sprite.height / 2)))
 
 
 # ---------------------------------------------------------------- text
@@ -408,16 +409,17 @@ def _title_sprite(text: str) -> Image.Image:
 
 
 def _draw_title(frame, text, t):
-    if not text.strip():
-        return
-    k = _ease(t / 0.45)
-    if k <= 0:
+    """The headline slams in: starts big, snaps down to size with a little overshoot."""
+    if not text.strip() or t <= 0:
         return
     img = _title_sprite(text)
+    k = min(1.0, t / 0.3)
     if k < 1:
-        img = img.copy()
-        img.putalpha(img.getchannel("A").point(lambda v: int(v * k)))
-    frame.alpha_composite(img, (0, int(300 - img.height / 2 + (1 - k) * 30)))
+        scale = 1.35 - 0.35 * _out_back(k)
+        img = img.resize((int(img.width * scale), int(img.height * scale)), Image.BILINEAR)
+        a = min(1.0, t / 0.12)
+        img.putalpha(img.getchannel("A").point(lambda v: int(v * a)))
+    frame.alpha_composite(img, (int((W - img.width) / 2), int(300 - img.height / 2)))
 
 
 @lru_cache(maxsize=64)
@@ -484,6 +486,35 @@ def _rotate(man: Image.Image, angle: float, spin: bool, lift: float):
 
 
 _last: dict[int, Image.Image] = {}
+def _rim_lit(man: Image.Image, color) -> Image.Image:
+    """A soft halo of the scene's light around the silhouette, so he never disappears into a dark sky."""
+    a = man.getchannel("A")
+    small = a.resize((a.width // 4, a.height // 4), Image.BILINEAR).filter(ImageFilter.MaxFilter(5))
+    halo = small.filter(ImageFilter.GaussianBlur(4)).resize(a.size, Image.BILINEAR).point(lambda v: v * 150 // 255)
+    out = Image.new("RGBA", man.size, tuple(color) + (0,))
+    out.putalpha(halo)
+    out.alpha_composite(man)
+    return out
+
+
+BLEND = 0.45   # seconds the stickman takes to move from one pose into the next
+
+
+def _smooth(x: float) -> float:
+    x = max(0.0, min(1.0, x))
+    return x * x * (3 - 2 * x)
+
+
+def _out_cubic(x: float) -> float:
+    x = max(0.0, min(1.0, x))
+    return 1 - (1 - x) ** 3
+
+
+def _out_back(x: float) -> float:
+    """Overshoots a little and settles: things pop in instead of fading in."""
+    x = max(0.0, min(1.0, x))
+    c = 1.7
+    return 1 + (c + 1) * (x - 1) ** 3 + c * (x - 1) ** 2
 
 
 def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: float,
@@ -493,22 +524,31 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
     _draw_props(frame, scene.get("emojis") or [], t_scene, cache_dir, kind)
 
     p = pose(scene["pose"], t_total, t_scene)
-    if prev_scene is not None and t_scene < 0.3:
-        p = blend(pose(prev_scene["pose"], t_total, t_scene + 99), p, _ease(t_scene / 0.3))
+    if prev_scene is not None and t_scene < BLEND:
+        p = blend(pose(prev_scene["pose"], t_total, t_scene + 99), p, _smooth(t_scene / BLEND))
     man = draw_silhouette(p)
+    if p.get("flip"):
+        man = man.transpose(Image.FLIP_LEFT_RIGHT)
+    man = _rim_lit(man, LOOKS[kind][3])
     x0, y0 = int(HOST_X - BOX_W / 2 + p["dx"]), int(GROUND + 8 - FOOT_Y)
     if p["rot"] % 360:
         man, ox, oy = _rotate(man, p["rot"], scene["pose"] == "spin", p["lift"])
         x0, y0 = x0 + ox, y0 + oy
     frame.alpha_composite(man, (max(0, x0), max(0, y0)), (max(0, -x0), max(0, -y0)))
 
-    # camera: a slow push-in through each scene, a small jolt on big moments
-    zoom = 1.0 + 0.045 * min(1.0, t_scene / 6)
+    # camera: a slow eased push-in with a gentle drift, a punch-in at each cut, a bigger one to open
+    # the video (the hook), and a short smooth jolt on big moments
+    zoom = 1.0 + 0.05 * _smooth(min(1.0, t_scene / 7))
+    if prev_scene is None:
+        zoom += 0.28 * (1 - _out_cubic(min(1.0, t_scene / 0.8)))
+    else:
+        zoom += 0.06 * (1 - _out_cubic(min(1.0, t_scene / 0.45)))
+    drift = 18 * math.sin(t_total * 0.35)
     shake = 0.0
     if scene["pose"] in SHAKY:
         when = 0.75 if scene["pose"] == "faint" else 0.0
-        shake = 10 * max(0.0, 1 - abs(t_scene - when - 0.2) / 0.25)
-    frame = _camera(frame, zoom, shake * math.sin(t_total * 70), shake * math.cos(t_total * 53))
+        shake = 9 * max(0.0, 1 - abs(t_scene - when - 0.2) / 0.3) ** 2
+    frame = _camera(frame, zoom, drift + shake * math.sin(t_total * 31), shake * math.cos(t_total * 23))
 
     # text sits on top of the camera move so it stays steady and sharp
     _draw_title(frame, scene.get("headline", ""), t_scene)

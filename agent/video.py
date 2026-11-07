@@ -7,7 +7,7 @@ from pathlib import Path
 
 from agent import animation, cinematic
 
-FPS = 30
+FPS = 60             # twice the usual 30 for smooth motion; YouTube Shorts plays 60 fps
 MAX_SPEEDUP = 1.2    # a script that runs long is read up to 20% faster before anything gets cut
 TAIL = 0.8           # seconds the last picture stays up after the voice ends
 CHUNK_WORDS = 3

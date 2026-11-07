@@ -73,7 +73,10 @@ conclusion while a deadpan narrator explains what REALLY happens. Rotate between
 
 {topic}
 What makes it work:
-- The title question IS the hook: the first line says it in under 2 seconds. No intro, no "hey guys".
+- Scene 1 is the hook and decides whether anyone keeps watching. In ONE short breath (under 15
+  words) ask the question AND tease the wildest consequence: "What if you stopped sleeping? By day
+  three, you'd be seeing things." No intro, no "hey guys". Its headline is the question in 2-5 words
+  ("NO SLEEP?"), its sfx is boom or sting, and the stickman reacts big (surprised, scared or point).
 - Walk through it in escalating stages with time or level markers (Hour 1, Day 3, Week 2, Minus 40
   degrees...). Each stage gets worse, weirder or more surprising than the last.
 - The facts are REAL science, medicine, physics, history or psychology, specific and checkable
