@@ -3,6 +3,7 @@ in assets/backgrounds/, where every video then reuses it for free.
 
     GEMINI_API_KEY=... python -m tools.paint_backgrounds        # paints what's missing
     VARIANTS=3 ONLY=city,lab python -m tools.paint_backgrounds  # just some places
+    WIDE=true python -m tools.paint_backgrounds                 # 16:9 ones for the weekly long video
 """
 import base64
 import io
@@ -18,6 +19,10 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "assets" / "backgrounds"
 API = "https://generativelanguage.googleapis.com/v1beta"
 MODELS = ["gemini-nano-banana-2.1", "gemini-3.1-flash-image", "gemini-3.1-flash-lite-image"]
+
+WIDE = os.environ.get("WIDE", "").lower() == "true"
+SIZE = (1920, 1080) if WIDE else (1080, 1920)
+ASPECT = "16:9" if WIDE else "9:16"
 
 STYLE = ("Vertical 9:16 background art for a stick-figure animation. Stylized 2D digital painting, clean "
          "shapes, soft gradients, cinematic warm lighting with glowing light sources, gentle atmospheric haze "
@@ -38,6 +43,14 @@ PLACES = {
     "city": "a city street at golden hour, shopfronts with warm glowing windows, a cafe awning, street lamps",
     "bedroom": "a cozy bedroom at night lit by a desk lamp, a bed, a window with city lights, plain posters on the wall",
 }
+
+
+if WIDE:
+    STYLE = STYLE.replace("Vertical 9:16", "Widescreen 16:9").replace(
+        "the bottom quarter of the picture, with the horizon or back wall around two-thirds of the way down, "
+        "and empty space on the left side",
+        "the bottom fifth of the picture, with the horizon or back wall around three-quarters of the way down, "
+        "and empty space on the left third")
 
 
 def _find_image(obj):
@@ -66,9 +79,9 @@ def paint(prompt: str, key: str) -> Image.Image:
         attempts = [
             (f"{API}/models/{model}:generateContent",
              {"contents": [{"parts": [{"text": prompt}]}],
-              "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": "9:16"}}}),
+              "generationConfig": {"responseModalities": ["IMAGE"], "imageConfig": {"aspectRatio": ASPECT}}}),
             (f"{API}/interactions",
-             {"model": model, "input": prompt, "response_format": {"type": "image", "aspect_ratio": "9:16"}}),
+             {"model": model, "input": prompt, "response_format": {"type": "image", "aspect_ratio": ASPECT}}),
         ]
         for url, body in attempts:
             resp = requests.post(url, headers=headers, json=body, timeout=300)
@@ -83,16 +96,16 @@ def paint(prompt: str, key: str) -> Image.Image:
 
 
 def fit(img: Image.Image) -> Image.Image:
-    """Crops and scales to exactly 1080x1920."""
+    """Crops and scales to exactly SIZE (1080x1920, or 1920x1080 for wide)."""
     w, h = img.size
-    target = 1080 / 1920
+    target = SIZE[0] / SIZE[1]
     if w / h > target:
         nw = int(h * target)
         img = img.crop(((w - nw) // 2, 0, (w - nw) // 2 + nw, h))
     else:
         nh = int(w / target)
         img = img.crop((0, (h - nh) // 2, w, (h - nh) // 2 + nh))
-    return img.resize((1080, 1920), Image.LANCZOS)
+    return img.resize(SIZE, Image.LANCZOS)
 
 
 def main() -> None:
@@ -107,7 +120,7 @@ def main() -> None:
         if only and place not in only:
             continue
         for i in range(1, variants + 1):
-            out = OUT / f"{place}-{i}.jpg"
+            out = OUT / f"{'wide-' if WIDE else ''}{place}-{i}.jpg"
             if out.exists():
                 continue
             prompt = f"{STYLE}\n\nThe place: {description}." + (" A different view and time of day from usual." if i > 1 else "")

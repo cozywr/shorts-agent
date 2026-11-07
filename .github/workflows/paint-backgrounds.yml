@@ -11,6 +11,10 @@ on:
         description: "Only these places, comma separated (empty = all)"
         type: string
         default: ""
+      wide:
+        description: "Widescreen 16:9 ones, for the weekly long video"
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -30,6 +34,7 @@ jobs:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           VARIANTS: ${{ inputs.variants }}
           ONLY: ${{ inputs.only }}
+          WIDE: ${{ inputs.wide }}
         run: python -m tools.paint_backgrounds
       - name: Keep them in the repo
         if: always()
