@@ -51,7 +51,7 @@ youtube:
   # Scheduled runs make the video a few hours early and YouTube publishes it at the next of these
   # times (it stays private until then, so you can still check it in YouTube Studio).
   # Empty list: scheduled uploads just stay private. Hand-started runs always stay private.
-  publish_times: ["09:00", "17:00"]
+  publish_times: ["08:00", "12:00", "18:00"]
   timezone: America/New_York
   category_id: "24"       # Entertainment (kids: "27", Education)
   made_for_kids: false    # kids: true (required for kids' videos; turns off comments and personalised ads)
