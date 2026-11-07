@@ -250,7 +250,34 @@ def _bloom(kind: str) -> Image.Image:
     return out
 
 
-def _scene_background(kind: str, t: float) -> Image.Image:
+PAINTED = Path(__file__).resolve().parent.parent / "assets" / "backgrounds"
+
+
+@lru_cache(maxsize=None)
+def _painted_list(kind: str) -> tuple[str, ...]:
+    return tuple(sorted(str(p) for p in PAINTED.glob(f"{kind}-*.jpg")))
+
+
+@lru_cache(maxsize=8)
+def _painted(path: str) -> Image.Image:
+    img = Image.open(path).convert("RGBA").resize((W + 80, H + 40), Image.LANCZOS)
+    shade = Image.new("L", (1, 256))   # darken the bottom a little so captions and the ground read well
+    for y in range(256):
+        shade.putpixel((0, y), int(max(0, (y - 170) / 86) ** 1.5 * 150))
+    dark = Image.new("RGBA", img.size, (8, 6, 14, 0))
+    dark.putalpha(shade.resize(img.size, Image.BILINEAR))
+    img.alpha_composite(dark)
+    return img
+
+
+def _scene_background(kind: str, t: float, variant: int = 0) -> Image.Image:
+    painted = _painted_list(kind)
+    if painted:   # a painted place from the library, drifting slowly sideways
+        img = _painted(painted[variant % len(painted)])
+        x = int(40 + 36 * math.sin(t * 0.12))
+        frame = img.crop((x, 20, x + W, 20 + H))
+        _particles(frame, kind, t)
+        return frame
     frame = _sky(kind).copy()
     _particles(frame, kind, t)
     for img, speed in _layers(kind):
@@ -783,7 +810,8 @@ def _out_back(x: float) -> float:
 def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: float,
                  mouth_open: float, cache_dir: str) -> Image.Image:
     kind = scene["background"] if scene["background"] in LOOKS else "sky"
-    frame = _scene_background(kind, t_total)
+    variant = sum(map(ord, scene.get("headline", "") + scene.get("narration", "")[:40]))
+    frame = _scene_background(kind, t_total, variant)
     _draw_props(frame, scene.get("emojis") or [], t_scene, cache_dir, kind)
 
     p = pose(scene["pose"], t_total, t_scene)
