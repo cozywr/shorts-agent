@@ -3,6 +3,7 @@ import base64
 import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
 import requests
@@ -106,3 +107,45 @@ def speak(text: str, voice_id: str, out: Path, settings: dict | None = None) -> 
         last = resp
         print(f"{model_id} didn't work ({resp.status_code}: {resp.text[:200]})")
     last.raise_for_status()
+
+
+def characters_left() -> int | None:
+    """Characters left on the ElevenLabs plan this month, or None if the key can't tell us."""
+    try:
+        resp = requests.get(f"{API}/user/subscription", headers=_headers(), timeout=60)
+        resp.raise_for_status()
+        sub = resp.json()
+        print(f"ElevenLabs plan: {sub.get('tier')}, {sub['character_count']:,} of {sub['character_limit']:,} "
+              "characters used this month")
+        return sub["character_limit"] - sub["character_count"]
+    except Exception as err:
+        print(f"Couldn't check the ElevenLabs plan: {err}")
+        return None
+
+
+def speak_parts(parts: list[str], voice_id: str, out: Path, settings: dict | None = None) -> tuple[dict, list[str]]:
+    """Reads a long narration in pieces (the voice models only take a few thousand characters at a time)
+    and joins them into one audio file with one set of timings. Also returns what was actually read for
+    each piece (the [direction] tags are dropped for a piece that fell back to the older model)."""
+    from agent.video import duration   # here to keep voices importable on its own
+    pieces, said, chars, starts, ends = [], [], [], [], []
+    offset = 0.0
+    for n, text in enumerate(parts):
+        piece = out.with_name(f"{out.stem}-{n}.mp3")
+        a = speak(text, voice_id, piece, settings)
+        if chars:   # the space between pieces
+            chars.append(" ")
+            starts.append(offset)
+            ends.append(offset)
+        chars += a["characters"]
+        starts += [t + offset for t in a["character_start_times_seconds"]]
+        ends += [t + offset for t in a["character_end_times_seconds"]]
+        offset += duration(piece)
+        pieces.append(piece)
+        said.append(a["text"])
+    listing = out.with_name(f"{out.stem}-parts.txt")
+    listing.write_text("".join(f"file '{p.resolve()}'\n" for p in pieces))
+    subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(listing),
+                    "-c:a", "libmp3lame", "-q:a", "2", str(out)], check=True)
+    return {"characters": chars, "character_start_times_seconds": starts, "character_end_times_seconds": ends,
+            "text": " ".join(said)}, said

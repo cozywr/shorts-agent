@@ -28,7 +28,9 @@ def publish_time(yt: dict, now: datetime | None = None) -> str | None:
     return min(slots).astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def upload(video: Path, script: dict, config: dict) -> str:
+def upload(video: Path, script: dict, config: dict, long: bool = False, thumbnail: Path | None = None) -> str:
+    """Uploads a Short, or with long=True the weekly long video (no #Shorts, its own publish time,
+    chapter timestamps from script["chapter_times"] and a thumbnail)."""
     creds = Credentials(
         token=None,
         refresh_token=os.environ["YOUTUBE_REFRESH_TOKEN"],
@@ -39,11 +41,21 @@ def upload(video: Path, script: dict, config: dict) -> str:
     )
     youtube = build("youtube", "v3", credentials=creds)
     yt = config["youtube"]
-    title = script["title"] if "#shorts" in script["title"].lower() else f"{script['title']} #Shorts"
+    if long:
+        lv = config.get("long_video") or {}
+        yt = {**yt, "publish_times": lv.get("publish_times", yt.get("publish_times")),
+              "hashtags": lv.get("hashtags", "#WhatIf #Science #Animation")}
+        title = script["title"].replace("#Shorts", "").strip()
+        description = script["description"]
+        if len(script.get("chapter_times") or []) >= 3:   # YouTube turns these into chapters
+            description += "\n\n" + "\n".join(script["chapter_times"])
+    else:
+        title = script["title"] if "#shorts" in script["title"].lower() else f"{script['title']} #Shorts"
+        description = script["description"]
     body = {
         "snippet": {
             "title": title[:100],
-            "description": f"{script['description']}\n\n{yt.get('hashtags', '#Shorts')}",
+            "description": f"{description}\n\n{yt.get('hashtags', '#Shorts')}",
             "tags": script.get("tags", [])[:15],
             "categoryId": yt["category_id"],
         },
@@ -67,4 +79,13 @@ def upload(video: Path, script: dict, config: dict) -> str:
     response = None
     while response is None:
         _, response = request.next_chunk()
+    if thumbnail and thumbnail.exists():
+        try:   # needs a verified channel; the video is fine without it
+            youtube.thumbnails().set(videoId=response["id"],
+                                     media_body=MediaFileUpload(str(thumbnail), mimetype="image/jpeg")).execute()
+            print("Thumbnail set")
+        except Exception as err:
+            print(f"Couldn't set the thumbnail (YouTube picks a frame instead): {err}")
+    if long:
+        return f"https://youtube.com/watch?v={response['id']}"
     return f"https://youtube.com/shorts/{response['id']}"

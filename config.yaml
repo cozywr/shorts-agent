@@ -56,3 +56,17 @@ youtube:
   category_id: "24"       # Entertainment (kids: "27", Education)
   made_for_kids: false    # kids: true (required for kids' videos; turns off comments and personalised ads)
   hashtags: "#Shorts #WhatIf #Science #Animation"   # kids: "#Shorts #FunFacts #KidsLearning"
+
+long_video:
+  # The weekly ~10 minute widescreen video (Weekly long video workflow, Saturdays).
+  chapters: 6
+  min_words: 1300         # about 9 minutes
+  max_words: 1500         # about 10 minutes
+  max_seconds: 780
+  fps: 30
+  workers: -1             # draw on every processor at once
+  music_volume: 0.08
+  publish_times: ["12:00"]   # Eastern, same timezone as the Shorts
+  hashtags: "#WhatIf #Science #Animation #StickFigureIdeas"
+  keep_for_shorts: 25000  # ElevenLabs characters always left for the Shorts; the long video skips a week rather than use them
+  next_topic: ""          # set a topic for the next one, or leave empty to let Claude pick

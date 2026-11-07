@@ -180,14 +180,15 @@ def write_fact(config: dict, used: list[str], topic: str | None = None) -> dict:
     return fact_check(s, script)
 
 
-def _ask(s: dict, prompt: str, schema: dict) -> dict:
+def _ask(s: dict, prompt: str, schema: dict, max_tokens: int = 16000) -> dict:
     client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY
-    resp = client.messages.create(
+    with client.messages.stream(   # streamed, so a long script isn't cut off by a timeout
         model=s["model"],
-        max_tokens=16000,
+        max_tokens=max_tokens,
         output_config={"effort": "high", "format": {"type": "json_schema", "schema": schema}},
         messages=[{"role": "user", "content": prompt}],
-    )
+    ) as stream:
+        resp = stream.get_final_message()
     if resp.stop_reason != "end_turn":
         raise RuntimeError(f"Script request stopped early: {resp.stop_reason}")
     return json.loads(next(b.text for b in resp.content if b.type == "text"))
@@ -229,7 +230,8 @@ def fact_check(s: dict, script: dict) -> dict:
     lines = "\n".join(f"Scene {i + 1}: {sc['narration']}" + (f"  [on-screen number: {sc['stat']}]" if sc.get("stat") else "")
                       for i, sc in enumerate(scenes))
     try:
-        result = _ask(s, CHECK_PROMPT.format(summary=script["summary"], lines=lines, n=len(scenes)), CHECK_SCHEMA)
+        result = _ask(s, CHECK_PROMPT.format(summary=script["summary"], lines=lines, n=len(scenes)), CHECK_SCHEMA,
+                      max_tokens=48000 if len(scenes) > 12 else 16000)
     except Exception as err:  # the check failing shouldn't stop the day's video
         print(f"Fact-check didn't run: {err}")
         script["fact_check"] = ["not run"]
@@ -242,4 +244,128 @@ def fact_check(s: dict, script: dict) -> dict:
         for sc, stat in zip(scenes, result["stats"]):
             sc["stat"] = stat.strip()
     script["fact_check"] = result["changes"]
+    return script
+
+
+# ---------------------------------------------------------------- the weekly long video
+
+LONG_PROMPT = """You write the weekly long video (about 9 to 10 minutes) for a YouTube channel for people aged 16
+to 30, "StickFigure Ideas". Each video is a stick-figure animation of ONE big "what if" question, followed all
+the way to its conclusion while a deadpan, dry, slightly sarcastic narrator explains what REALLY happens.
+The same channel posts 50-second Shorts; this is the deeper, longer version people sit down and watch.
+
+{topic}
+What makes it work:
+- The first 30 seconds decide whether anyone stays. Open straight on the question and the stakes, tease the
+  wildest thing that will happen later ("by the end of the week, your own brain is lying to you"), and promise
+  the ending ("and the last stage is the one nobody expects"). No "hey guys", no channel intro.
+- Tell it as one story in {chapters} chapters that escalate: each chapter is a stage (a time, a depth, a
+  level, a distance) and is worse, weirder or more surprising than the last. Every chapter ends on a small
+  cliffhanger or question that pulls into the next one.
+- Go deeper than a Short could: the real mechanism behind each stage (the biology, physics, psychology or
+  history), one or two surprising real examples or records, and what experts actually know. The facts are
+  REAL and checkable (NASA, medical sources, encyclopedias, published research). No myths, no made-up numbers.
+  If you're not sure, leave it out.
+- Dry, sarcastic, relatable humor all the way through: deadpan one-liners, ironic understatement, jokes about
+  school, work, rent, sleep schedules, phones, the gym, group chats. The stickman suffers comically (faints,
+  panics, gives up, tries something stupid). Funny, never cruel. A running joke or callback is great.
+- End with a satisfying final twist or answer, a one-line takeaway, then ask the viewer a question to answer
+  in the comments and to suggest the next "what if".
+- Advertiser-friendly: no gore or graphic injuries (keep danger cartoonish and implied), no self-harm or
+  suicide, no drugs, alcohol or vaping, no sexual content, no slurs or insults about groups, no real people
+  or brands, nothing people could copy to hurt themselves.
+
+Format:
+- {min_words}-{max_words} spoken words in total, in {chapters} chapters. Chapter 1 starts with the hook.
+- Each chapter has a short title (2 to 5 words, e.g. "THE FIRST NIGHT", "DAY 3: THE CRASH") and 6 to 12
+  scenes. A scene is what's on screen while 15 to 35 words are said (about 6 to 14 seconds), so the picture
+  keeps changing.
+- narration: exactly what the narrator says. Numbers in words where it reads better, no emoji. You may add
+  up to two voice directions per chapter, each ONE word in square brackets: [sarcastic], [sighs], [laughs],
+  [whispers], [gasps], [deadpan].
+- headline: the stage marker or a 1-4 word punch at the top of the scene ("DAY 3", "HOUR 17",
+  "BRAIN: OFFLINE"), or empty in about a third of the scenes.
+- shout: what the stickman says in a comic speech bubble, 1-3 words ("NOPE.", "WHY?!", "I'M FINE"), or empty.
+  Use it in about a third of the scenes.
+- emojis: 1 to 4 standard emoji showing what's happening (e.g. ["☕", "🧠"]). Only common single emoji every
+  phone has: no flags, skin tones or combined emoji.
+- background: one of {backgrounds}. Pick what fits; change it when the story moves somewhere new.
+- pose: one of {poses}.
+  explain = talking with his hands, point = points at the pictures, think = hand on chin,
+  surprised = jumps back, cheer/jump/dance = excited, shrug = "whatever", wave = waves,
+  faint = collapses flat on his back, spin = flips in the air, run = runs back and forth in a panic,
+  laugh = can't stop laughing, scared = shaking with his arms up, walk = walks along.
+  Never the same pose twice in a row; save faint/run/scared for the big moments.
+- stat: the key real number of the scene, shown huge on screen and counting up as it's said: "0.25 S",
+  "47%", "11,000 M", "-40°C", "3 DAYS". Only a number the narration of that scene actually says, with a short
+  unit. Use it in 2 or 3 scenes per chapter, otherwise empty. A scene with a stat uses at most 2 emojis.
+- sfx: the sound at the start of the scene, one of {sounds}. Use dramatic ones at the big moments and "none"
+  in most scenes (a long video with a sound every scene gets tiring).
+- Don't repeat any of these earlier long-video topics: {used}
+
+Reply with the script as JSON."""
+
+LONG_TOPIC_ANY = ("Pick a big, fresh idea that has enough real science or history for ten minutes: your body "
+                  "pushed to the limit, surviving somewhere extreme, space, the deep ocean, an impossible "
+                  "premise or superpower, the end of something everyone relies on, or a psychology question.")
+
+LONG_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "topic": {"type": "string", "description": "A few words, e.g. 'a week without sleep'"},
+        "summary": {"type": "string", "description": "One sentence stating the question and the answer, to avoid repeats"},
+        "chapters": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "scenes": SCHEMA["properties"]["scenes"],
+                },
+                "required": ["title", "scenes"],
+                "additionalProperties": False,
+            },
+        },
+        "title": {"type": "string", "description": "Catchy YouTube title under 70 characters that makes the audience click, no hashtags"},
+        "thumbnail_text": {"type": "string", "description": "2 to 4 huge words for the thumbnail, e.g. 'NO SLEEP FOR 11 DAYS'"},
+        "description": {"type": "string", "description": "2-3 sentences for the YouTube description"},
+        "tags": {"type": "array", "items": {"type": "string"}, "description": "8-15 tags"},
+    },
+    "required": ["topic", "summary", "chapters", "title", "thumbnail_text", "description", "tags"],
+    "additionalProperties": False,
+}
+
+
+def write_long(config: dict, used: list[str], topic: str | None = None) -> dict:
+    """The weekly ~10 minute video: one story in chapters. Each scene is tagged with its chapter, and the
+    first scene of each chapter after the first gets the chapter's title card."""
+    s = config["facts"]
+    lv = config.get("long_video") or {}
+    prompt = LONG_PROMPT.format(
+        topic=TOPIC_GIVEN.format(topic=topic) if topic else LONG_TOPIC_ANY,
+        chapters=lv.get("chapters", 6),
+        min_words=lv.get("min_words", 1300),
+        max_words=lv.get("max_words", 1500),
+        backgrounds=", ".join(BACKGROUNDS),
+        poses=", ".join(POSES),
+        sounds=", ".join(SOUNDS),
+        used="; ".join(used[-80:]) or "none yet",
+    )
+    script = _ask(s, prompt, LONG_SCHEMA, max_tokens=64000)
+    scenes = []
+    for n, ch in enumerate(script["chapters"], 1):
+        chapter_scenes = [sc for sc in ch["scenes"] if sc["narration"].strip()]
+        for i, sc in enumerate(chapter_scenes):
+            sc["emojis"] = sc["emojis"][:4] or ["⭐"]
+            sc["chapter"] = n
+            if i == 0 and n > 1:   # chapter 1 opens on the hook, no title card
+                sc["chapter_title"] = ch["title"].strip()
+                sc["chapter_number"] = n
+        scenes += chapter_scenes
+    if len(scenes) < 10:
+        raise RuntimeError("The long script came back with too few scenes.")
+    script["scenes"] = scenes
+    script = fact_check(s, script)
+    for ch in script["chapters"]:   # the scenes are the corrected copy; drop the duplicate
+        ch.pop("scenes", None)
     return script

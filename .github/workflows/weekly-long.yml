@@ -1,0 +1,78 @@
+name: Weekly long video
+
+on:
+  schedule:
+    # Saturdays at 12:00 UTC (7am Eastern in winter); YouTube publishes it at config long_video.publish_times (12pm Eastern).
+    - cron: "0 12 * * 6"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Make the video but don't upload it"
+        type: boolean
+        default: true
+      topic:
+        description: "Topic (optional), e.g. what if you never slept again. Empty lets the agent pick."
+        type: string
+        default: ""
+      publish_at:
+        description: "Go public at this time (Eastern, e.g. 12:00, or now). Empty keeps a hand-started upload private."
+        type: string
+        default: ""
+      remake_from_run:
+        description: "Remake an earlier run's video (same script; its run ID)"
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  long:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-noto-color-emoji
+      - run: pip install -r requirements.txt
+      - name: Fetch the earlier run's script
+        if: inputs.remake_from_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.remake_from_run }}
+          github-token: ${{ github.token }}
+          path: remake/
+      - name: Make and upload this week's long video
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          TOPIC: ${{ inputs.topic }}
+          PUBLISH_ON_SCHEDULE: ${{ github.event_name == 'schedule' }}
+          PUBLISH_AT: ${{ inputs.publish_at }}
+          SCRIPT_FILE: ${{ inputs.remake_from_run != '' && 'remake' || '' }}
+        run: |
+          if [ -n "$SCRIPT_FILE" ]; then SCRIPT_FILE=$(find remake -name script.json | head -1); export SCRIPT_FILE; fi
+          python -m agent.long_video ${{ inputs.dry_run && '--dry-run' || '' }}
+      - name: Keep the video so you can watch it
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: long-${{ github.run_number }}
+          path: |
+            output/long-*/long.mp4
+            output/long-*/thumbnail.jpg
+            output/long-*/script.json
+          retention-days: 14
+      - name: Remember the voice, sounds and which topics were used
+        if: always()
+        run: |
+          git config user.name "shorts-agent"
+          git config user.email "shorts-agent@users.noreply.github.com"
+          git add -A history.json voices.json assets
+          git diff --cached --quiet || (git commit -m "Log this week's long video [skip ci]" && git pull --rebase && git push)

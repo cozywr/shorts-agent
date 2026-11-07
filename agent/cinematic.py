@@ -14,11 +14,12 @@ from pathlib import Path
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 from agent.animation import (BOX_H, BOX_W, FOOT_Y, HEAD_R, LOWER_ARM, NECK, SHAKY, SHIN, SPINE, THIGH,
-                             UPPER_ARM, W, H, _ease, _lerp, _mix, _vec, blend, emoji_image, pose)
+                             UPPER_ARM, W, H, WIDE, _ease, _lerp, _mix, _vec, blend, emoji_image, pose)
 
 FONTS = Path(__file__).resolve().parent.parent / "assets" / "fonts"
-GROUND = 1500
-HOST_X = 330
+GROUND = 905 if WIDE else 1500
+HOST_X = 560 if WIDE else 330
+MAN_SCALE = 0.7 if WIDE else 1.0   # the stickman is drawn smaller in the widescreen picture
 SIL = (12, 11, 20)
 PAD = 700          # extra width on each scenery layer, for the slow sideways drift
 
@@ -255,12 +256,23 @@ PAINTED = Path(__file__).resolve().parent.parent / "assets" / "backgrounds"
 
 @lru_cache(maxsize=None)
 def _painted_list(kind: str) -> tuple[str, ...]:
+    if WIDE:
+        wide = tuple(sorted(str(p) for p in PAINTED.glob(f"wide-{kind}-*.jpg")))
+        if wide:
+            return wide
     return tuple(sorted(str(p) for p in PAINTED.glob(f"{kind}-*.jpg")))
 
 
 @lru_cache(maxsize=8)
 def _painted(path: str) -> Image.Image:
-    img = Image.open(path).convert("RGBA").resize((W + 80, H + 40), Image.LANCZOS)
+    img = Image.open(path).convert("RGBA")
+    tw, th = W + 80, H + 40
+    if abs(img.width / img.height - tw / th) > 0.1:   # a tall picture in the wide video: use a band of it
+        scale = tw / img.width
+        img = img.resize((tw, int(img.height * scale)), Image.LANCZOS)
+        top = max(0, min(img.height - th, int(img.height * 0.80 - th * 0.82)))
+        img = img.crop((0, top, tw, top + th))
+    img = img.resize((tw, th), Image.LANCZOS)
     shade = Image.new("L", (1, 256))   # darken the bottom a little so captions and the ground read well
     for y in range(256):
         shade.putpixel((0, y), int(max(0, (y - 170) / 86) ** 1.5 * 150))
@@ -515,7 +527,16 @@ def _prop_silhouette(emoji: str, size: int, cache_dir: str, kind: str = "sky") -
     return canvas
 
 
-def _prop_layout(n: int):
+def _prop_layout(n: int, stat: bool = False):
+    if WIDE:
+        cx, cy = 1310, 660 if stat else 560
+        if n == 1:
+            return [(cx, cy, 380)]
+        if n == 2:
+            return [(cx - 200, cy, 300), (cx + 200, cy, 300)]
+        if n == 3:
+            return [(cx, cy - 140, 250), (cx - 180, cy + 120, 250), (cx + 180, cy + 120, 250)]
+        return [(cx - 160, cy - 125, 220), (cx + 160, cy - 125, 220), (cx - 160, cy + 125, 220), (cx + 160, cy + 125, 220)]
     cx, cy = 760, 1010
     if n == 1:
         return [(cx, cy, 460)]
@@ -526,9 +547,9 @@ def _prop_layout(n: int):
     return [(cx - 140, cy - 160, 240), (cx + 140, cy - 160, 240), (cx - 140, cy + 160, 240), (cx + 140, cy + 160, 240)]
 
 
-def _draw_props(frame, emojis, t, cache_dir, kind="sky"):
+def _draw_props(frame, emojis, t, cache_dir, kind="sky", stat=False):
     emojis = emojis[:4]
-    for i, (e, (x, y, size)) in enumerate(zip(emojis, _prop_layout(len(emojis)))):
+    for i, (e, (x, y, size)) in enumerate(zip(emojis, _prop_layout(len(emojis), stat))):
         x01 = (t - 0.2 - i * 0.15) / 0.4
         if x01 <= 0:
             continue
@@ -551,13 +572,14 @@ def _draw_props(frame, emojis, t, cache_dir, kind="sky"):
 def _title_sprite(text: str) -> Image.Image:
     """Warm golden headline with a dark outline and a soft glow, like a movie title."""
     text = text.upper().strip()
-    size = 112
+    size = 104 if WIDE else 112
+    limit = 1500 if WIDE else 940
     font = _font(size)
-    while font.getlength(text) > 940 and size > 60:
+    while font.getlength(text) > limit and size > 60:
         size -= 6
         font = _font(size)
     lines = [text]
-    if font.getlength(text) > 940:
+    if font.getlength(text) > limit:
         words = text.split()
         half = len(words) // 2
         lines = [" ".join(words[:half]), " ".join(words[half:])]
@@ -610,7 +632,8 @@ def _draw_clock(frame, t):
     d.ellipse((c - 6, c - 6, c + 6, c + 6), fill=(255, 196, 90))
     if k < 0.999:
         face = face.resize((max(1, int(face.width * k)), max(1, int(face.height * k))), Image.BILINEAR)
-    frame.alpha_composite(face, (int(W / 2 - face.width / 2), int(165 - face.height / 2)))
+    x, y = (150, 135) if WIDE else (W / 2, 165)
+    frame.alpha_composite(face, (int(x - face.width / 2), int(y - face.height / 2)))
 
 
 STAT_RE = re.compile(r"^([^\d\-+]*)([\-+]?)([\d,]*\.?\d+)(.*)$")
@@ -683,8 +706,51 @@ def _draw_stat(frame, stat, t):
     ImageDraw.Draw(layer).rounded_rectangle((100, 60 + h - 22, 100 + max(6, bar), 60 + h - 14), 4, fill=(255, 196, 90, 230))
     if pop < 0.999:
         layer = layer.resize((max(1, int(layer.width * pop)), max(1, int(layer.height * pop))), Image.BILINEAR)
-    cx, cy = W / 2, 515
+    cx, cy = (1310, 335) if WIDE else (W / 2, 515)
     frame.alpha_composite(layer, (int(cx - layer.width / 2), int(cy - layer.height / 2)))
+
+
+CARD_SECONDS = 2.6   # how long a chapter's title card stays up (the long video)
+
+
+@lru_cache(maxsize=16)
+def _small_caps_sprite(text: str, size: int) -> Image.Image:
+    font = _font(size, "Bold") if (FONTS / "Montserrat-Bold.ttf").exists() else _font(size)
+    tw = int(font.getlength(text) + size * 0.3 * len(text)) + 40
+    img = Image.new("RGBA", (tw, int(size * 1.6)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    x = 20
+    for ch in text:   # letter-spaced, like a film's chapter card
+        d.text((x, img.height / 2), ch, font=font, fill=(255, 226, 170), anchor="lm")
+        x += font.getlength(ch) + size * 0.3
+    return img.crop((0, 0, int(x) + 10, img.height))
+
+
+def _draw_chapter_card(frame, number, title, t):
+    """A chapter's title card: the picture dims, a thin gold line draws across, PART 2 and the title
+    rise into place, then it all fades away."""
+    k_in = _out_cubic(min(1.0, t / 0.5))
+    k = min(k_in, _smooth((CARD_SECONDS - t) / 0.45))
+    if k <= 0:
+        return
+    shade = Image.new("RGBA", (W, H), (6, 5, 12, int(170 * k)))
+    frame.alpha_composite(shade)
+    cy = H * 0.45
+    title_img = _title_sprite(title)
+    rise = int((1 - k_in) * 30)
+    if k < 1:
+        title_img = title_img.copy()
+        title_img.putalpha(title_img.getchannel("A").point(lambda v: int(v * k)))
+    frame.alpha_composite(title_img, (int((W - title_img.width) / 2), int(cy + 40 + rise - title_img.height / 2)))
+    if number:
+        label = _small_caps_sprite(f"PART {number}", 40)
+        if k < 1:
+            label = label.copy()
+            label.putalpha(label.getchannel("A").point(lambda v: int(v * k)))
+        frame.alpha_composite(label, (int((W - label.width) / 2), int(cy - 80 + rise - label.height / 2)))
+    half = int(260 * _out_cubic(min(1.0, t / 0.7)))
+    if half > 2:
+        ImageDraw.Draw(frame).rectangle((W / 2 - half, cy - 30, W / 2 + half, cy - 27), fill=(255, 200, 110, int(220 * k)))
 
 
 TIME_WORDS = ("SECOND", "MINUTE", "HOUR", "DAY", "WEEK", "MONTH", "YEAR")
@@ -701,7 +767,7 @@ def _draw_title(frame, text, t):
         img = img.resize((int(img.width * scale), int(img.height * scale)), Image.BILINEAR)
         a = min(1.0, t / 0.12)
         img.putalpha(img.getchannel("A").point(lambda v: int(v * a)))
-    frame.alpha_composite(img, (int((W - img.width) / 2), int(300 - img.height / 2)))
+    frame.alpha_composite(img, (int((W - img.width) / 2), int((135 if WIDE else 300) - img.height / 2)))
     if any(w in text.upper() for w in TIME_WORDS):
         _draw_clock(frame, t)
 
@@ -735,11 +801,13 @@ def _draw_pill(frame, text, t, x, base=690):
 
 @lru_cache(maxsize=1)
 def _vignette() -> Image.Image:
-    small = Image.new("L", (108, 192), 0)
+    sw, sh = W // 10, H // 10
+    small = Image.new("L", (sw, sh), 0)
     d = ImageDraw.Draw(small)
     for i in range(40):
         a = int(150 * (1 - i / 40) ** 2)
-        d.rectangle((i, i * 1.6, 107 - i, 191 - i * 1.6), outline=a)
+        fx, fy = (i * 1.6, i) if WIDE else (i, i * 1.6)
+        d.rectangle((fx, fy, sw - 1 - fx, sh - 1 - fy), outline=a)
     mask = small.resize((W, H), Image.BICUBIC).filter(ImageFilter.GaussianBlur(40))
     out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     out.putalpha(mask)
@@ -748,7 +816,7 @@ def _vignette() -> Image.Image:
 
 @lru_cache(maxsize=6)
 def _grain(i: int) -> Image.Image:
-    small = Image.frombytes("L", (540, 960), os.urandom(540 * 960)).resize((W, H), Image.NEAREST)
+    small = Image.frombytes("L", (W // 2, H // 2), os.urandom(W // 2 * H // 2)).resize((W, H), Image.NEAREST)
     out = Image.new("RGBA", (W, H), (255, 255, 255, 0))
     out.putalpha(small.point(lambda v: v // 14))
     return out
@@ -812,7 +880,7 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
     kind = scene["background"] if scene["background"] in LOOKS else "sky"
     variant = sum(map(ord, scene.get("headline", "") + scene.get("narration", "")[:40]))
     frame = _scene_background(kind, t_total, variant)
-    _draw_props(frame, scene.get("emojis") or [], t_scene, cache_dir, kind)
+    _draw_props(frame, scene.get("emojis") or [], t_scene, cache_dir, kind, bool(scene.get("stat")))
 
     p = pose(scene["pose"], t_total, t_scene)
     if prev_scene is not None and t_scene < BLEND:
@@ -821,10 +889,14 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
     if p.get("flip"):
         man = man.transpose(Image.FLIP_LEFT_RIGHT)
     man = _rim_lit(man, LOOKS[kind][3])
-    x0, y0 = int(HOST_X - BOX_W / 2 + p["dx"]), int(GROUND + 8 - FOOT_Y)
+    ox = oy = 0
     if p["rot"] % 360:
         man, ox, oy = _rotate(man, p["rot"], scene["pose"] == "spin", p["lift"])
-        x0, y0 = x0 + ox, y0 + oy
+    s = MAN_SCALE
+    if s != 1:
+        man = man.resize((int(man.width * s), int(man.height * s)), Image.LANCZOS)
+    x0 = int(HOST_X + p["dx"] * s + (ox - BOX_W / 2) * s)
+    y0 = int(GROUND + 8 + (oy - FOOT_Y) * s)
     frame.alpha_composite(man, (max(0, x0), max(0, y0)), (max(0, -x0), max(0, -y0)))
 
     # camera: a slow eased push-in with a gentle drift, a punch-in at each cut, a bigger one to open
@@ -842,9 +914,13 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
     frame = _camera(frame, zoom, drift + shake * math.sin(t_total * 31), shake * math.cos(t_total * 23))
 
     # text sits on top of the camera move so it stays steady and sharp
-    _draw_title(frame, scene.get("headline", ""), t_scene)
-    _draw_stat(frame, scene.get("stat", ""), t_scene)
-    _draw_pill(frame, scene.get("shout", ""), t_scene, HOST_X + p["dx"], 790 if scene.get("stat") else 690)
+    card = CARD_SECONDS if scene.get("chapter_title") else 0.0
+    _draw_title(frame, scene.get("headline", ""), t_scene - card)
+    _draw_stat(frame, scene.get("stat", ""), t_scene - card)
+    pill_base = 470 if WIDE else (790 if scene.get("stat") else 690)
+    _draw_pill(frame, scene.get("shout", ""), t_scene - card, HOST_X + p["dx"] * MAN_SCALE, pill_base)
+    if card and t_scene < card:
+        _draw_chapter_card(frame, scene.get("chapter_number", 0), scene["chapter_title"], t_scene)
     frame.alpha_composite(_vignette())
     frame.alpha_composite(_grain(int(t_total * 24) % 6))
     out = frame.convert("RGB")
@@ -854,4 +930,36 @@ def render_frame(scene: dict, prev_scene: dict | None, t_scene: float, t_total: 
         out = Image.blend(_last[id(prev_scene)], out, _ease(t_scene / 0.35))
     else:
         _last[id(scene)] = out
+    return out
+
+
+def thumbnail(scene: dict, text: str, cache_dir: str, out: Path) -> Path:
+    """The long video's thumbnail: the opening scene with the stickman reacting, and a few huge gold words."""
+    calm = {**scene, "headline": "", "stat": "", "shout": "", "chapter_title": ""}
+    frame = render_frame(calm, None, 2.5, 2.5, 0.0, cache_dir).convert("RGBA")
+    text = text.upper().strip()
+    words = text.split()
+    lines = [text] if len(words) < 3 else [" ".join(words[:(len(words) + 1) // 2]), " ".join(words[(len(words) + 1) // 2:])]
+    size = 190
+    while max(_font(size).getlength(line) for line in lines) > W - 160 and size > 80:
+        size -= 10
+    font = _font(size)
+    lh = int(size * 1.05)
+    h = lh * len(lines) + 80
+    mask, stroke = Image.new("L", (W, h), 0), Image.new("L", (W, h), 0)
+    md, sd = ImageDraw.Draw(mask), ImageDraw.Draw(stroke)
+    for i, line in enumerate(lines):
+        y = 40 + lh * i + lh / 2
+        md.text((W / 2, y), line, font=font, fill=255, anchor="mm")
+        sd.text((W / 2, y), line, font=font, fill=255, anchor="mm", stroke_width=size // 11)
+    layer = Image.new("RGBA", (W, h), (255, 140, 50, 0))
+    layer.putalpha(stroke.filter(ImageFilter.GaussianBlur(26)).point(lambda v: v * 190 // 255))
+    edge = Image.new("RGBA", (W, h), (30, 14, 10, 0))
+    edge.putalpha(stroke)
+    layer.alpha_composite(edge)
+    grad = _gradient3((255, 250, 228), (255, 222, 140), (255, 160, 60), height=h, width=W).convert("RGBA")
+    grad.putalpha(mask)
+    layer.alpha_composite(grad)
+    frame.alpha_composite(layer, (0, 30))
+    frame.convert("RGB").resize((1280, int(1280 * H / W)), Image.LANCZOS).save(out, quality=92)
     return out

@@ -10,9 +10,13 @@ import urllib.request
 from functools import lru_cache
 from pathlib import Path
 
+import os
+
 from PIL import Image, ImageDraw, ImageFont
 
-W, H = 1080, 1920
+# VIDEO_FORMAT=wide makes a 16:9 picture for the weekly long video (only the cinematic look supports it)
+WIDE = os.environ.get("VIDEO_FORMAT") == "wide"
+W, H = (1920, 1080) if WIDE else (1080, 1920)
 GROUND = 1440                      # y of the ground line the stickman stands on
 HOST_X = 300                       # where the stickman stands
 PROPS_CENTER = (745, 930)          # where the pictures go

@@ -1,6 +1,8 @@
 """Turns the scenes and the narration into the finished Short: the stickman cartoon, the voice,
 and big word-by-word captions that light up as each word is said."""
 import json
+import multiprocessing
+import os
 import re
 import subprocess
 from pathlib import Path
@@ -61,10 +63,16 @@ CAPTION_STYLES = {
     # clean white Montserrat with a soft shadow; the word being said turns warm yellow
     "cinematic": "Style: Word,Montserrat ExtraBold,88,&H005AD4FF,&H00FFFFFF,&H00000000,&H96000000,0,0,0,0,100,100,2,0,1,0,3,5,80,80,0,1",
 }
+if animation.WIDE:   # the widescreen long video: smaller captions near the bottom
+    CAPTION_STYLES["cinematic"] = CAPTION_STYLES["cinematic"].replace(",88,", ",62,")
 POPS = {
     "cartoon": r"{\pos(540,1610)\fscx118\fscy118\t(0,90,\fscx100\fscy100)}",
     "cinematic": r"{\pos(540,1660)\blur1\fad(60,0)\fscx104\fscy104\t(0,120,\fscx100\fscy100)}",
 }
+
+
+if animation.WIDE:
+    POPS["cinematic"] = POPS["cinematic"].replace(r"\pos(540,1660)", r"\pos(960,1005)")
 
 
 def _ass_time(t: float) -> str:
@@ -76,8 +84,8 @@ def captions(all_words: list[dict], speed: float, out: Path, look: str = "cartoo
     """Karaoke captions: each word turns yellow as it's said."""
     header = """[Script Info]
 ScriptType: v4.00+
-PlayResX: 1080
-PlayResY: 1920
+PlayResX: {w}
+PlayResY: {h}
 WrapStyle: 0
 
 [V4+ Styles]
@@ -106,6 +114,7 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
             t = w["end"] / speed
         pop = POPS[look]
         lines.append(f"Dialogue: 0,{_ass_time(start)},{_ass_time(end)},Word,,0,0,0,,{pop}{text.strip()}\n")
+    header = header.replace("{w}", str(animation.W)).replace("{h}", str(animation.H))
     out.write_text(header.replace("{style}", CAPTION_STYLES[look]) + "".join(lines))
     return out
 
@@ -120,6 +129,7 @@ def assemble(scenes: list[dict], starts: list[int], narration: Path, alignment: 
     spoken = duration(narration)
     speed = min(max(spoken / (max_seconds - TAIL), base_speed), max(base_speed, MAX_SPEEDUP))
     length = min(spoken / speed + TAIL, max_seconds)
+    settings["used_speed"] = speed   # the long video's chapter timestamps need it
 
     char_starts = alignment["character_start_times_seconds"]
     scene_times = [0.0] + [char_starts[min(c, len(char_starts) - 1)] / speed - 0.1 for c in starts[1:]]
@@ -154,26 +164,71 @@ def assemble(scenes: list[dict], starts: list[int], narration: Path, alignment: 
         parts[0] = parts[0].replace("[voice]", "[a]")
     audio = ";".join(parts)
     video = (f"[0:v]subtitles=filename='{subs}':fontsdir='{FONT_DIR}',format=yuv420p[v]")
+    fps = settings.get("fps", FPS)
+    workers = int(settings.get("workers") or 1)
+    if workers == -1:
+        workers = os.cpu_count() or 1
+    frames = int(length * fps)
+    _JOB.update(scenes=scenes, scene_times=scene_times, renderer=renderer, mouth=mouth, fps=fps,
+                cache=str(workdir.parent), workdir=workdir)
+    if workers > 1:   # long videos: draw separate stretches at the same time, then join them
+        bounds = [frames * k // workers for k in range(workers + 1)]
+        with multiprocessing.get_context("fork").Pool(workers) as pool:
+            parts = pool.map(_render_part, [(k, bounds[k], bounds[k + 1]) for k in range(workers)])
+        listing = workdir / "parts.txt"
+        listing.write_text("".join(f"file '{part}'\n" for part in parts))
+        source = ["-f", "concat", "-safe", "0", "-i", str(listing)]
+    else:
+        source = ["-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{animation.W}x{animation.H}", "-r", str(fps), "-i", "-"]
     proc = subprocess.Popen(
-        ["ffmpeg", "-y", "-loglevel", "error",
-         "-f", "rawvideo", "-pix_fmt", "rgb24", "-s", f"{animation.W}x{animation.H}", "-r", str(FPS), "-i", "-",
+        ["ffmpeg", "-y", "-loglevel", "error", *source,
          *inputs, "-filter_complex", f"{video};{audio}", "-map", "[v]", "-map", "[a]",
-         "-t", f"{length:.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(FPS),
+         "-t", f"{length:.3f}", "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-r", str(fps),
          "-c:a", "aac", "-ar", "44100", "-ac", "2", "-movflags", "+faststart", str(out)],
-        stdin=subprocess.PIPE)
-    cache = str(workdir.parent)
-    frames = int(length * FPS)
-    i = 0
-    for f in range(frames):
-        t = f / FPS
-        while i + 1 < len(scenes) and t >= scene_times[i + 1]:
-            i += 1
-        frame = renderer.render_frame(scenes[i], scenes[i - 1] if i else None, t - scene_times[i], t,
-                                       mouth(t), cache)
-        proc.stdin.write(frame.tobytes())
-        if f % (FPS * 10) == 0:
-            print(f"Drawing {t:.0f}s / {length:.0f}s")
-    proc.stdin.close()
+        stdin=subprocess.PIPE if workers <= 1 else None)
+    if workers <= 1:
+        for f, frame in _frames(0, frames):
+            proc.stdin.write(frame.tobytes())
+        proc.stdin.close()
     if proc.wait() != 0:
         raise RuntimeError("ffmpeg failed while making the video")
     return out
+
+
+_JOB: dict = {}
+
+
+def _frames(first: int, last: int, warmup: int = 0):
+    """Draws frames first..last-1. `warmup` frames before `first` are drawn and thrown away, so a
+    cross-fade that started just before this stretch still has its previous picture."""
+    j = _JOB
+    scenes, scene_times, fps = j["scenes"], j["scene_times"], j["fps"]
+    i = 0
+    for f in range(max(0, first - warmup), last):
+        t = f / fps
+        while i + 1 < len(scenes) and t >= scene_times[i + 1]:
+            i += 1
+        frame = j["renderer"].render_frame(scenes[i], scenes[i - 1] if i else None, t - scene_times[i], t,
+                                           j["mouth"](t), j["cache"])
+        if f < first:
+            continue
+        if f % (fps * 10) == 0:
+            print(f"Drawing {t:.0f}s", flush=True)
+        yield f, frame
+
+
+def _render_part(job: tuple[int, int, int]) -> str:
+    k, first, last = job
+    out = _JOB["workdir"] / f"part{k}.mp4"
+    fps = _JOB["fps"]
+    proc = subprocess.Popen(
+        ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
+         "-s", f"{animation.W}x{animation.H}", "-r", str(fps), "-i", "-",
+         "-c:v", "libx264", "-preset", "veryfast", "-crf", "16", "-pix_fmt", "yuv420p", str(out)],
+        stdin=subprocess.PIPE)
+    for _, frame in _frames(first, last, warmup=int(fps * 0.4)):
+        proc.stdin.write(frame.tobytes())
+    proc.stdin.close()
+    if proc.wait() != 0:
+        raise RuntimeError(f"ffmpeg failed on part {k}")
+    return str(out)
