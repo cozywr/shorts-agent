@@ -96,4 +96,4 @@ jobs:
           git config user.name "shorts-agent"
           git config user.email "shorts-agent@users.noreply.github.com"
           git add -A history.json voices.json topics.txt assets
-          git diff --cached --quiet || (git commit -m "Log today's Short [skip ci]" && git push)
+          git diff --cached --quiet || (git commit -m "Log today's Short [skip ci]" && git pull --rebase && git push)
