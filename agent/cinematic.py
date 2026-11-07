@@ -300,11 +300,14 @@ OUTFIT = {"hat": "cap", "hat_color": CAP, "top": "none", "top_color": (60, 110, 
 EYE = (246, 244, 236)
 
 
-def _face(d, hc, r, face, k):
-    """Simple white eyes and mouth, looking the way he faces, so you can read how he feels."""
+def _face(d, hc, r, face, k, skin=SIL):
+    """Simple eyes and mouth, looking the way he faces, so you can read how he feels.
+    White on a dark face; dark with a white sparkle on a light face."""
     ex = [hc[0] + r * 0.12, hc[0] + r * 0.56]
     ey = hc[1] + r * 0.05
     w = 4 * k
+    light = sum(skin) / 3 > 110
+    EYE, PUPIL = ((40, 32, 44), (255, 255, 255)) if light else (globals()["EYE"], SIL)
     if face == "dizzy":
         for x in ex:
             e = r * 0.13
@@ -323,8 +326,9 @@ def _face(d, hc, r, face, k):
         for x in ex:
             e = r * 0.13 * big
             d.ellipse((x - e * 0.8, ey - e, x + e * 0.8, ey + e), fill=EYE)
-            pe = e * 0.45
-            d.ellipse((x + e * 0.25 - pe, ey - pe * 0.6, x + e * 0.25 + pe, ey + pe * 1.4), fill=SIL)
+            pe = e * (0.32 if light else 0.45)
+            px, py = (x + e * 0.2, ey - e * 0.35) if light else (x + e * 0.25, ey + pe * 0.4)
+            d.ellipse((px - pe, py - pe, px + pe, py + pe), fill=PUPIL)
     mx, my = hc[0] + r * 0.38, hc[1] + r * 0.5
     if face == "wow":
         m = r * 0.12
@@ -417,7 +421,8 @@ def draw_silhouette(p: dict) -> Image.Image:
         sc = tuple(o["scarf"])
         d.line((neck[0] - r * 0.1, neck[1] - r * 0.1, neck[0] - r * 0.75, neck[1] + r * 0.9), fill=sc, width=int(lw * 0.9))
         d.ellipse((neck[0] - r * 0.6, neck[1] - r * 0.45, neck[0] + r * 0.6, neck[1] + r * 0.15), fill=sc)
-    d.ellipse((hc[0] - r, hc[1] - r, hc[0] + r, hc[1] + r), fill=SIL)
+    skin = tuple(o.get("skin") or SIL)
+    d.ellipse((hc[0] - r, hc[1] - r, hc[0] + r, hc[1] + r), fill=skin)
     hat, hcol = o.get("hat", "cap"), tuple(o.get("hat_color", CAP))
     if hat == "cap":      # crown over the top of the head and a brim pointing the way he faces
         d.chord((hc[0] - r * 1.02, hc[1] - r * 1.04, hc[0] + r * 1.02, hc[1] + r * 0.9), 192, 348, fill=hcol)
@@ -434,14 +439,14 @@ def draw_silhouette(p: dict) -> Image.Image:
         d.rounded_rectangle((hc[0] - r * 0.6, hc[1] - r * 0.25, hc[0] - r * 0.15, hc[1] + r * 0.45), r * 0.15, fill=hcol)
     elif hat == "hair":   # long shaggy hair; the bangs are drawn after the face so they cover one eye
         pts = [(0.95, -0.35), (0.6, -1.18), (-0.2, -1.3), (-0.95, -0.98), (-1.28, -0.3), (-1.25, 0.95), (-1.02, 0.55),
-               (-0.92, 1.15), (-0.68, 0.62), (-0.5, 1.02), (-0.32, 0.45), (0.2, 0.2)]
+               (-0.92, 1.15), (-0.68, 0.62), (-0.5, 1.02), (-0.32, 0.45), (-0.12, -0.38), (0.4, -0.58)]
         d.polygon([(hc[0] + r * x, hc[1] + r * y) for x, y in pts], fill=hcol)
     if o.get("glasses"):
         for x in (hc[0] + r * 0.12, hc[0] + r * 0.56):
             e = r * 0.24
             d.ellipse((x - e, hc[1] + r * 0.05 - e, x + e, hc[1] + r * 0.05 + e), outline=EYE, width=4 * k)
         d.line((hc[0] + r * 0.36, hc[1], hc[0] + r * 0.32, hc[1]), fill=EYE, width=4 * k)
-    _face(d, hc, r, p.get("face", "happy"), k)
+    _face(d, hc, r, p.get("face", "happy"), k, skin)
     if hat == "hair":
         bangs = [(-0.15, -0.95), (0.7, -1.0), (1.18, -0.55), (1.08, 0.12), (0.9, -0.08), (0.78, 0.38), (0.6, 0.02),
                  (0.42, 0.34), (0.3, -0.12), (0.05, 0.02)]
