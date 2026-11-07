@@ -54,7 +54,7 @@ def narration_text(scenes: list[dict]) -> tuple[str, list[int]]:
     return text, starts
 
 
-def run(dry_run: bool, topic: str | None = None) -> None:
+def run(dry_run: bool, topic: str | None = None, script_file: str | None = None) -> None:
     # Check before spending money on the script and voice.
     missing = [name for name in YOUTUBE_SECRETS if not os.environ.get(name)]
     if missing and not dry_run:
@@ -70,11 +70,16 @@ def run(dry_run: bool, topic: str | None = None) -> None:
     workdir.mkdir(parents=True, exist_ok=True)
 
     planned = None
-    if not topic:
+    if script_file:   # remake an earlier video from its saved script (same story, new look)
+        script = json.loads(Path(script_file).read_text())
+        planned = script.get("planned_topic")
+        topic = script["topic"]
+    elif not topic:
         topic = planned = next_planned_topic()
         if planned:
             print(f"Topic from topics.txt: {planned}")
-    script = fact_writer.write_fact(config, [h["summary"] for h in history["facts"]], topic)
+    if not script_file:
+        script = fact_writer.write_fact(config, [h["summary"] for h in history["facts"]], topic)
     if planned:
         script["planned_topic"] = planned  # so a later re-upload of this video can cross it off
     (workdir / "script.json").write_text(json.dumps(script, indent=2, ensure_ascii=False))
@@ -115,7 +120,9 @@ def run(dry_run: bool, topic: str | None = None) -> None:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--dry-run", action="store_true")
+    parser.add_argument("--script", default=os.environ.get("SCRIPT_FILE") or None,
+                        help="remake a video from an earlier run's script.json")
     parser.add_argument("--topic", default=os.environ.get("TOPIC") or None,
                         help='e.g. "why cats purr"; empty lets Claude pick')
     args = parser.parse_args()
-    run(args.dry_run, args.topic)
+    run(args.dry_run, args.topic, args.script)

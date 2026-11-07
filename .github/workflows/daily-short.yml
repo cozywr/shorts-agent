@@ -20,6 +20,10 @@ on:
         description: "Go public at this time (Eastern, e.g. 20:00, or now). Empty keeps a hand-started upload private."
         type: string
         default: ""
+      remake_from_run:
+        description: "Remake an earlier run's video with the current look (same script; its run ID)"
+        type: string
+        default: ""
       upload_from_run:
         description: "Upload the video an earlier run made instead (its run ID from the Actions page URL)"
         type: string
@@ -47,6 +51,13 @@ jobs:
           run-id: ${{ inputs.upload_from_run }}
           github-token: ${{ github.token }}
           path: saved/
+      - name: Fetch the earlier run's script
+        if: inputs.remake_from_run != ''
+        uses: actions/download-artifact@v4
+        with:
+          run-id: ${{ inputs.remake_from_run }}
+          github-token: ${{ github.token }}
+          path: remake/
       - name: Upload the earlier run's video
         if: inputs.upload_from_run != ''
         env:
@@ -66,7 +77,10 @@ jobs:
           TOPIC: ${{ inputs.topic }}
           PUBLISH_ON_SCHEDULE: ${{ github.event_name == 'schedule' }}
           PUBLISH_AT: ${{ inputs.publish_at }}
-        run: python -m agent.main ${{ inputs.dry_run && '--dry-run' || '' }}
+          SCRIPT_FILE: ${{ inputs.remake_from_run != '' && 'remake/script.json' || '' }}
+        run: |
+          if [ -n "$SCRIPT_FILE" ]; then SCRIPT_FILE=$(find remake -name script.json | head -1); export SCRIPT_FILE; fi
+          python -m agent.main ${{ inputs.dry_run && '--dry-run' || '' }}
       - name: Keep the video so you can watch it
         if: always()
         uses: actions/upload-artifact@v4
