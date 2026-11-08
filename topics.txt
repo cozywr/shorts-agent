@@ -1,7 +1,6 @@
 # Upcoming "What if" topics, used from the top down: each scheduled video takes the first one
 # and removes it after it's uploaded. Edit freely: add, delete or reorder lines.
 # When the list is empty, Claude picks a fresh topic itself. Lines starting with # are ignored.
-Why you can't tickle yourself
 What if you stopped drinking water
 What if you could never feel pain
 What if you got lost in the Sahara with one bottle of water
