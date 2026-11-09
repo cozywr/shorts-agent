@@ -2,11 +2,13 @@ name: Daily Short
 
 on:
   schedule:
-    # Made ~3 hours early; YouTube then publishes at config youtube.publish_times (8am, 12pm, 6pm Eastern).
-    # Cron is UTC: 10:00, 14:00 and 20:00 UTC are 5am, 9am and 3pm Eastern in winter (6am, 10am, 4pm in summer).
-    - cron: "0 10 * * *"
+    # ONE Short a day for now (since 2026-11-10, until Nati says go back to normal).
+    # Made ~3 hours early; YouTube then publishes at config youtube.publish_times (12pm Eastern).
+    # Cron is UTC: 14:00 UTC is 9am Eastern in winter (10am in summer).
+    # To go back to 3 a day: un-comment the two lines below and set publish_times back to ["08:00", "12:00", "18:00"].
+    # - cron: "0 10 * * *"
     - cron: "0 14 * * *"
-    - cron: "0 20 * * *"
+    # - cron: "0 20 * * *"
   workflow_dispatch:         # lets you trigger a run by hand from the Actions tab
     inputs:
       dry_run:
