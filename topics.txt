@@ -1,7 +1,6 @@
 # Upcoming "What if" topics, used from the top down: each scheduled video takes the first one
 # and removes it after it's uploaded. Edit freely: add, delete or reorder lines.
 # When the list is empty, Claude picks a fresh topic itself. Lines starting with # are ignored.
-What if you were invisible but couldn't turn it off
 What if you were trapped in an elevator for a week
 Why your brain makes up memories that never happened
 What if you ate nothing but fast food for a month
