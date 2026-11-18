@@ -1,7 +1,6 @@
 # Upcoming "What if" topics, used from the top down: each scheduled video takes the first one
 # and removes it after it's uploaded. Edit freely: add, delete or reorder lines.
 # When the list is empty, Claude picks a fresh topic itself. Lines starting with # are ignored.
-Why we procrastinate even when we know better
 What if you never looked at your phone for 30 days
 What if you could fly but only 2 meters off the ground
 What if you were lost in the Amazon rainforest
